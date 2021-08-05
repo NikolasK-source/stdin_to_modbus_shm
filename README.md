@@ -1,80 +1,35 @@
-# CMake Project template
+# Modbus TCP client shm
 
-This repository is a template for CMake C++ Projects.
+Read instructions from stdin and write them to a modbus shared memory.
 
-## Supported Compiilers
+## Build
+```
+git submodule init
+mkdir build
+cd build
+cmake .. -DCMAKE_CXX_COMPILER=$(which clang++) -DCMAKE_BUILD_TYPE=Release -DCLANG_FORMAT=OFF
+cmake -build . 
+```
 
-    - gcc
-    - clang
+## Use
+```
+stdin_to_modbus_shm [OPTION...]
 
-## Project structure
-
-### Directory src
-Use this directory for all source files of the project.
-
-### Directory libs
-Place libraries here. This Directory is added to the include path.
-
-## Scripts
-
-### check_format.sh
-This script checks all ```*.cpp``` and ```*.hpp``` files for conformity with the file ```.clang-format```.
-
-### format.sh
-This script formats all ```*.cpp``` and ```*.hpp``` files in the src directory with clang format.
-The files are changed by it!
-
-## Options
-
-### Target
-The name of the executable that is generated.
-
-### STANDARD
-The minimum required C++ standard: 98, 03, 11, 14, 17, 20
-
-### ARCHITECTURE
-The CPU architecture for which the code is generated.
-It is only relevant if the option ```OPTIMIZE_FOR_ARCHITECTURE``` is enabled.
-
-```native``` should be the best choice in most cases.
-
-### BUILD_DOC
-Enables the automatic generation of a doxygen documentation.
-Doxygen must be installed on the system and a ```Doxyfile.in``` file must be provided.
-An additional CMake target is created.
-
-### COMPILER_WARNINGS
-Enable/Disable compiler warnings.
-
-### ENABLE_MULTITHREADING
-Link the default multithreading library for the current target system.
-Prefers ```pthread``` if available.
-
-### MAKE_32_BIT_BINARY
-Forces the compiler to generate a 32 bit application by setting the ```-m32``` flag.
-
-### OPENMP
-Enables the support for openmp.
-
-### OPTIMIZE_DEBUG
-Enables Optimization ```-O3``` also in debug configuration.
-Should only be enabled if the resulting binary is too slow.
-
-### CLANG_FORMAT
-Enable automatic formatting via clang-format.
-An additional CMake target is created.
-
-### CLANG_TIDY
-Enable static code checks with clang tidy.
-An additional CMake target is created.
-
-Not usable in this version due to contradictory warnings.
-
-### LTO_ENABLED
-Enable interprocedural and link time optimizations.
-
-### COMPILER_EXTENSIONS
-Enable compiler specific C++ extensions.
-Should be disabled for reasons of portability.
+  -n, --name-prefix arg   name prefix of the shared memory objects (default: modbus_)
+      --address-base arg  Numerical base (radix) that is used for the addresses (see 
+                          https://en.cppreference.com/w/cpp/string/basic_string/stoul) (default: 0)
+      --value-base arg    Numerical base (radix) that is used for the values (see 
+                          https://en.cppreference.com/w/cpp/string/basic_string/stoul) (default: 0)
+  -h, --help              print usage
 
 
+Data input format: reg_type:address:value
+    reg_type: modbus register type:                         [do|di|ao|ai]
+    address : address of the target register:               [0-65535]
+    value   : value that is written to the target register: [0-65535]
+              For the registers do and di all numerical values different from 0 are interpreted as 1.
+```
+
+## Libraries
+This application uses the following libraries:
+- cxxopts by jarro2783 (https://github.com/jarro2783/cxxopts)
