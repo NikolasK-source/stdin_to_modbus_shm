@@ -13,7 +13,7 @@ SHM::SHM(std::string name) : name(std::move(name)) {
     // open shared memory object
     fd = shm_open(this->name.c_str(), O_RDWR, 0660);
     if (fd < 0) {
-        throw std::system_error(errno, std::generic_category(), "Failed to create shared memory '" + this->name + '\'');
+        throw std::system_error(errno, std::generic_category(), "Failed to open shared memory '" + this->name + '\'');
     }
 
     // get size of shared memory object
