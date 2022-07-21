@@ -219,6 +219,7 @@ int main(int argc, char **argv) {
                     break;
             }
         }
+        terminate = true;
     };
 
     // start input thread.
