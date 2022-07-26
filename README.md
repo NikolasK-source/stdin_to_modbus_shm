@@ -36,3 +36,4 @@ Data input format: reg_type:address:value
 ## Libraries
 This application uses the following libraries:
 - cxxopts by jarro2783 (https://github.com/jarro2783/cxxopts)
+- libmodbus by Stéphane Raimbault (https://github.com/stephane/libmodbus)
