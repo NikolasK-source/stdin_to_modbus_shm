@@ -48,6 +48,7 @@ int main(int argc, char **argv) {
                           "https://en.cppreference.com/w/cpp/string/basic_string/stoul)",
                           cxxopts::value<int>()->default_value("0"));
     options.add_options()("h,help", "print usage");
+    options.add_options()("version", "print version information");
 
     // parse arguments
     cxxopts::ParseResult args;
@@ -79,7 +80,7 @@ int main(int argc, char **argv) {
         std::cout << std::endl;
         std::cout << "MIT License:" << std::endl;
         std::cout << std::endl;
-        std::cout << "Copyright (c) 2021 Nikolas Koesling" << std::endl;
+        std::cout << "Copyright (c) 2021-2022 Nikolas Koesling" << std::endl;
         std::cout << std::endl;
         std::cout << "Permission is hereby granted, free of charge, to any person obtaining a copy" << std::endl;
         std::cout << "of this software and associated documentation files (the \"Software\"), to deal" << std::endl;
@@ -98,6 +99,12 @@ int main(int argc, char **argv) {
         std::cout << "LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM," << std::endl;
         std::cout << "OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE" << std::endl;
         std::cout << "SOFTWARE." << std::endl;
+        exit(EX_OK);
+    }
+
+    // print version
+    if (args.count("version")) {
+        std::cout << PROJECT_NAME << " " << PROJECT_VERSION << std::endl;
         exit(EX_OK);
     }
 
@@ -223,7 +230,7 @@ int main(int argc, char **argv) {
     };
 
     // start input thread.
-    // a detached thread will be terminated by it's destructor as soon as the thread object is out of scope
+    // a detached thread will be terminated by its destructor as soon as the thread object is out of scope
     // (end of function main)
     std::thread input_thread(input_thread_func);
     input_thread.detach();

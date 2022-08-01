@@ -4,7 +4,7 @@ cmake_minimum_required(VERSION 3.13.4 FATAL_ERROR)
 # ======================================================================================================================
 
 # project
-project(stdin_to_modbus_shm LANGUAGES CXX VERSION 0.0.1)
+project(stdin_to_modbus_shm LANGUAGES CXX VERSION 1.0.0)
 
 # settings
 set(Target "stdin_to_modbus_shm")    # Executable name (without file extension!)
@@ -54,6 +54,10 @@ set_target_properties(${Target} PROPERTIES
         CXX_STANDARD_REQUIRED ON
         CXX_EXTENSIONS ${COMPILER_EXTENSIONS}
     )
+
+# project version and name
+target_compile_definitions(${Target} PUBLIC "PROJECT_VERSION=\"${CMAKE_PROJECT_VERSION}\"")
+target_compile_definitions(${Target} PUBLIC "PROJECT_NAME=\"${CMAKE_PROJECT_NAME}\"")
 
 # options that are valid for gcc and clang
 function(commonopts)
