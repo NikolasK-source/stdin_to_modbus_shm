@@ -1,3 +1,8 @@
+/*
+ * Copyright (C) 2021-2022 Nikolas Koesling <nikolas@koesling.info>.
+ * This program is free software. You can redistribute it and/or modify it under the terms of the MIT License.
+ */
+
 #pragma once
 
 #include <string>
@@ -8,7 +13,7 @@ private:
     std::string name;
     int         fd   = -1;
     std::size_t size = 0;
-    void *      addr = nullptr;
+    void       *addr = nullptr;
 
 public:
     explicit SHM(std::string name);

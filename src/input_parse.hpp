@@ -1,3 +1,8 @@
+/*
+ * Copyright (C) 2021-2022 Nikolas Koesling <nikolas@koesling.info>.
+ * This program is free software. You can redistribute it and/or modify it under the terms of the MIT License.
+ */
+
 #pragma once
 
 #include "split_string.hpp"
@@ -36,7 +41,7 @@ static void parse_input(const std::string &input, input_data_t &target, int base
 
     // get register type
     input_data_t::register_type_t type;
-    auto &                        type_str = split_input.at(0);
+    auto                         &type_str = split_input.at(0);
     for (auto &c : type_str)
         c = static_cast<char>(std::tolower(c));
     if (type_str == "do") {
