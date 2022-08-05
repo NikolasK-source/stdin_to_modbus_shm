@@ -1,4 +1,4 @@
-# Modbus TCP client shm
+# STDIN to modbus shared memory
 
 Read instructions from stdin and write them to a modbus shared memory.
 
