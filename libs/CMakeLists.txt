@@ -10,3 +10,6 @@ target_link_libraries(${Target} PRIVATE rt)
 
 add_subdirectory(cxxopts EXCLUDE_FROM_ALL)
 target_link_libraries(${Target} PRIVATE cxxopts)
+
+add_subdirectory(cxxendian)
+target_link_libraries(${Target} PRIVATE cxxendian)
