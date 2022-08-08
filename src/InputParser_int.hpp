@@ -75,8 +75,8 @@ static T parse_int(const std::string &value, int base) {
  * =====================================================================================================================
  */
 
-static std::vector<Instruction>
-        parse_u8_lo(Instruction::register_type_t type, std::size_t addr, const std::string &value, int base, bool verbose) {
+static std::vector<Instruction> parse_u8_lo(
+        Instruction::register_type_t type, std::size_t addr, const std::string &value, int base, bool verbose) {
     union {
         uint16_t reg;
         uint8_t  i[2];
@@ -85,15 +85,13 @@ static std::vector<Instruction>
     i[0] = parse_int<uint8_t>(value, base);
     i[1] = 0;
 
-    if (verbose) {
-        std::cerr << "# low byte unsigned integer 32 bit: " << i[0] << std::endl;
-    }
+    if (verbose) { std::cerr << "# low byte unsigned integer 32 bit: " << i[0] << std::endl; }
 
     return {Instruction(type, addr, reg)};
 }
 
-static std::vector<Instruction>
-        parse_u8_hi(Instruction::register_type_t type, std::size_t addr, const std::string &value, int base, bool verbose) {
+static std::vector<Instruction> parse_u8_hi(
+        Instruction::register_type_t type, std::size_t addr, const std::string &value, int base, bool verbose) {
     union {
         uint16_t reg;
         uint8_t  i[2];
@@ -102,16 +100,14 @@ static std::vector<Instruction>
     i[1] = parse_int<uint8_t>(value, base);
     i[0] = 0;
 
-    if (verbose) {
-        std::cerr << "# high byte unsigned integer 8 bit: " << i[1] << std::endl;
-    }
+    if (verbose) { std::cerr << "# high byte unsigned integer 8 bit: " << i[1] << std::endl; }
 
     return {Instruction(type, addr, reg)};
 }
 
 // low byte
-static std::vector<Instruction>
-        parse_i8_lo(Instruction::register_type_t type, std::size_t addr, const std::string &value, int base, bool verbose) {
+static std::vector<Instruction> parse_i8_lo(
+        Instruction::register_type_t type, std::size_t addr, const std::string &value, int base, bool verbose) {
     union {
         uint16_t reg;
         int8_t   i[2];
@@ -120,16 +116,14 @@ static std::vector<Instruction>
     i[0] = parse_int<int8_t>(value, base);
     i[1] = 0;
 
-    if (verbose) {
-        std::cerr << "# low byte signed integer 8 bit: " << i[0] << std::endl;
-    }
+    if (verbose) { std::cerr << "# low byte signed integer 8 bit: " << i[0] << std::endl; }
 
     return {Instruction(type, addr, reg)};
 }
 
 // high byte
-static std::vector<Instruction>
-        parse_i8_hi(Instruction::register_type_t type, std::size_t addr, const std::string &value, int base, bool verbose) {
+static std::vector<Instruction> parse_i8_hi(
+        Instruction::register_type_t type, std::size_t addr, const std::string &value, int base, bool verbose) {
     union {
         uint16_t reg;
         int8_t   i[2];
@@ -138,9 +132,7 @@ static std::vector<Instruction>
     i[1] = parse_int<int8_t>(value, base);
     i[0] = 0;
 
-    if (verbose) {
-        std::cerr << "# high byte signed integer 8 bit: " << i[1] << std::endl;
-    }
+    if (verbose) { std::cerr << "# high byte signed integer 8 bit: " << i[1] << std::endl; }
 
     return {Instruction(type, addr, reg)};
 }
@@ -153,34 +145,30 @@ static std::vector<Instruction>
  */
 
 // big endian
-static std::vector<Instruction>
-        parse_u16_ab(Instruction::register_type_t type, std::size_t addr, const std::string &value, int base, bool verbose) {
+static std::vector<Instruction> parse_u16_ab(
+        Instruction::register_type_t type, std::size_t addr, const std::string &value, int base, bool verbose) {
     cxxendian::Host_Int<uint16_t> hi(parse_int<uint16_t>(value, base));
     cxxendian::BE_Int<uint16_t>   bi(hi);
 
-    if (verbose) {
-        std::cerr << "# big endian unsigned integer 16 bit: " << hi << std::endl;
-    }
+    if (verbose) { std::cerr << "# big endian unsigned integer 16 bit: " << hi << std::endl; }
 
     return {Instruction(type, addr, bi.get())};
 }
 
 // little endian
-static std::vector<Instruction>
-        parse_u16_ba(Instruction::register_type_t type, std::size_t addr, const std::string &value, int base, bool verbose) {
+static std::vector<Instruction> parse_u16_ba(
+        Instruction::register_type_t type, std::size_t addr, const std::string &value, int base, bool verbose) {
     cxxendian::Host_Int<uint16_t> hi(parse_int<uint16_t>(value, base));
     cxxendian::LE_Int<uint16_t>   li(hi);
 
-    if (verbose) {
-        std::cerr << "# little endian unsigned integer 16 bit: " << hi << std::endl;
-    }
+    if (verbose) { std::cerr << "# little endian unsigned integer 16 bit: " << hi << std::endl; }
 
     return {Instruction(type, addr, li.get())};
 }
 
 // big endian
-static std::vector<Instruction>
-        parse_i16_ab(Instruction::register_type_t type, std::size_t addr, const std::string &value, int base, bool verbose) {
+static std::vector<Instruction> parse_i16_ab(
+        Instruction::register_type_t type, std::size_t addr, const std::string &value, int base, bool verbose) {
     cxxendian::Host_Int<int16_t> hi(parse_int<int16_t>(value, base));
     cxxendian::BE_Int<int16_t>   bi(hi);
 
@@ -191,20 +179,16 @@ static std::vector<Instruction>
 
     i = bi.get();
 
-    if (verbose) {
-        std::cerr << "# big endian signed integer 16 bit: " << hi << std::endl;
-    }
+    if (verbose) { std::cerr << "# big endian signed integer 16 bit: " << hi << std::endl; }
 
-    if (verbose) {
-        std::cerr << std::endl;
-    }
+    if (verbose) { std::cerr << std::endl; }
 
     return {Instruction(type, addr, reg)};
 }
 
 // little endian
-static std::vector<Instruction>
-        parse_i16_ba(Instruction::register_type_t type, std::size_t addr, const std::string &value, int base, bool verbose) {
+static std::vector<Instruction> parse_i16_ba(
+        Instruction::register_type_t type, std::size_t addr, const std::string &value, int base, bool verbose) {
     cxxendian::Host_Int<int16_t> hi(parse_int<int16_t>(value, base));
     cxxendian::LE_Int<int16_t>   li(hi);
 
@@ -215,9 +199,7 @@ static std::vector<Instruction>
 
     i = li.get();
 
-    if (verbose) {
-        std::cerr << "# little endian signed integer 16 bit: " << hi << std::endl;
-    }
+    if (verbose) { std::cerr << "# little endian signed integer 16 bit: " << hi << std::endl; }
 
     return {Instruction(type, addr, reg)};
 }
@@ -230,8 +212,8 @@ static std::vector<Instruction>
  */
 
 // big endian
-static std::vector<Instruction>
-        parse_u32abcd(Instruction::register_type_t type, std::size_t addr, const std::string &value, int base, bool verbose) {
+static std::vector<Instruction> parse_u32abcd(
+        Instruction::register_type_t type, std::size_t addr, const std::string &value, int base, bool verbose) {
     typedef uint32_t           int_t;
     cxxendian::Host_Int<int_t> hi(parse_int<int_t>(value, base));
     cxxendian::BE_Int<int_t>   ei(hi);
@@ -243,16 +225,14 @@ static std::vector<Instruction>
 
     i = ei.get();
 
-    if (verbose) {
-        std::cerr << "big endian unsigned integer " << sizeof(int_t) * 8 << " bit: " << hi << std::endl;
-    }
+    if (verbose) { std::cerr << "big endian unsigned integer " << sizeof(int_t) * 8 << " bit: " << hi << std::endl; }
 
     return {Instruction(type, addr, reg[0]), Instruction(type, addr + 1, reg[1])};
 }
 
 // little endian
-static std::vector<Instruction>
-        parse_u32dcba(Instruction::register_type_t type, std::size_t addr, const std::string &value, int base, bool verbose) {
+static std::vector<Instruction> parse_u32dcba(
+        Instruction::register_type_t type, std::size_t addr, const std::string &value, int base, bool verbose) {
     typedef uint32_t           int_t;
     cxxendian::Host_Int<int_t> hi(parse_int<int_t>(value, base));
     cxxendian::LE_Int<int_t>   ei(hi);
@@ -264,16 +244,14 @@ static std::vector<Instruction>
 
     i = ei.get();
 
-    if (verbose) {
-        std::cerr << "little endian unsigned integer " << sizeof(int_t) * 8 << " bit: " << hi << std::endl;
-    }
+    if (verbose) { std::cerr << "little endian unsigned integer " << sizeof(int_t) * 8 << " bit: " << hi << std::endl; }
 
     return {Instruction(type, addr, reg[0]), Instruction(type, addr + 1, reg[1])};
 }
 
 // big endian reversed
-static std::vector<Instruction>
-        parse_u32cdab(Instruction::register_type_t type, std::size_t addr, const std::string &value, int base, bool verbose) {
+static std::vector<Instruction> parse_u32cdab(
+        Instruction::register_type_t type, std::size_t addr, const std::string &value, int base, bool verbose) {
     typedef uint32_t           int_t;
     cxxendian::Host_Int<int_t> hi(parse_int<int_t>(value, base));
     cxxendian::BE_Int<int_t>   ei(hi);
@@ -286,15 +264,16 @@ static std::vector<Instruction>
     i = ei.get();
 
     if (verbose) {
-        std::cerr << "big endian unsigned integer " << sizeof(int_t) * 8 << " bit (reversed register order): " << hi << std::endl;
+        std::cerr << "big endian unsigned integer " << sizeof(int_t) * 8 << " bit (reversed register order): " << hi
+                  << std::endl;
     }
 
     return {Instruction(type, addr, reg[1]), Instruction(type, addr + 1, reg[0])};
 }
 
 // little endian reversed
-static std::vector<Instruction>
-        parse_u32badc(Instruction::register_type_t type, std::size_t addr, const std::string &value, int base, bool verbose) {
+static std::vector<Instruction> parse_u32badc(
+        Instruction::register_type_t type, std::size_t addr, const std::string &value, int base, bool verbose) {
     typedef uint32_t           int_t;
     cxxendian::Host_Int<int_t> hi(parse_int<int_t>(value, base));
     cxxendian::LE_Int<int_t>   ei(hi);
@@ -307,15 +286,16 @@ static std::vector<Instruction>
     i = ei.get();
 
     if (verbose) {
-        std::cerr << "little endian unsigned integer " << sizeof(int_t) * 8 << " bit (reversed register order): " << hi << std::endl;
+        std::cerr << "little endian unsigned integer " << sizeof(int_t) * 8 << " bit (reversed register order): " << hi
+                  << std::endl;
     }
 
     return {Instruction(type, addr, reg[1]), Instruction(type, addr + 1, reg[0])};
 }
 
 // big endian
-static std::vector<Instruction>
-        parse_i32abcd(Instruction::register_type_t type, std::size_t addr, const std::string &value, int base, bool verbose) {
+static std::vector<Instruction> parse_i32abcd(
+        Instruction::register_type_t type, std::size_t addr, const std::string &value, int base, bool verbose) {
     typedef int32_t            int_t;
     cxxendian::Host_Int<int_t> hi(parse_int<int_t>(value, base));
     cxxendian::BE_Int<int_t>   ei(hi);
@@ -327,16 +307,14 @@ static std::vector<Instruction>
 
     i = ei.get();
 
-    if (verbose) {
-        std::cerr << "big endian signed integer " << sizeof(int_t) * 8 << " bit: " << hi << std::endl;
-    }
+    if (verbose) { std::cerr << "big endian signed integer " << sizeof(int_t) * 8 << " bit: " << hi << std::endl; }
 
     return {Instruction(type, addr, reg[0]), Instruction(type, addr + 1, reg[1])};
 }
 
 // little endian
-static std::vector<Instruction>
-        parse_i32dcba(Instruction::register_type_t type, std::size_t addr, const std::string &value, int base, bool verbose) {
+static std::vector<Instruction> parse_i32dcba(
+        Instruction::register_type_t type, std::size_t addr, const std::string &value, int base, bool verbose) {
     typedef int32_t            int_t;
     cxxendian::Host_Int<int_t> hi(parse_int<int_t>(value, base));
     cxxendian::LE_Int<int_t>   ei(hi);
@@ -348,16 +326,14 @@ static std::vector<Instruction>
 
     i = ei.get();
 
-    if (verbose) {
-        std::cerr << "little endian signed integer " << sizeof(int_t) * 8 << " bit: " << hi << std::endl;
-    }
+    if (verbose) { std::cerr << "little endian signed integer " << sizeof(int_t) * 8 << " bit: " << hi << std::endl; }
 
     return {Instruction(type, addr, reg[0]), Instruction(type, addr + 1, reg[1])};
 }
 
 // big endian reversed
-static std::vector<Instruction>
-        parse_i32cdab(Instruction::register_type_t type, std::size_t addr, const std::string &value, int base, bool verbose) {
+static std::vector<Instruction> parse_i32cdab(
+        Instruction::register_type_t type, std::size_t addr, const std::string &value, int base, bool verbose) {
     typedef int32_t            int_t;
     cxxendian::Host_Int<int_t> hi(parse_int<int_t>(value, base));
     cxxendian::BE_Int<int_t>   ei(hi);
@@ -370,15 +346,16 @@ static std::vector<Instruction>
     i = ei.get();
 
     if (verbose) {
-        std::cerr << "big endian signed integer " << sizeof(int_t) * 8 << " bit (reversed register order): " << hi << std::endl;
+        std::cerr << "big endian signed integer " << sizeof(int_t) * 8 << " bit (reversed register order): " << hi
+                  << std::endl;
     }
 
     return {Instruction(type, addr, reg[1]), Instruction(type, addr + 1, reg[0])};
 }
 
 // little endian reversed
-static std::vector<Instruction>
-        parse_i32badc(Instruction::register_type_t type, std::size_t addr, const std::string &value, int base, bool verbose) {
+static std::vector<Instruction> parse_i32badc(
+        Instruction::register_type_t type, std::size_t addr, const std::string &value, int base, bool verbose) {
     typedef int32_t            int_t;
     cxxendian::Host_Int<int_t> hi(parse_int<int_t>(value, base));
     cxxendian::LE_Int<int_t>   ei(hi);
@@ -391,7 +368,8 @@ static std::vector<Instruction>
     i = ei.get();
 
     if (verbose) {
-        std::cerr << "little endian signed integer " << sizeof(int_t) * 8 << " bit (reversed register order): " << hi << std::endl;
+        std::cerr << "little endian signed integer " << sizeof(int_t) * 8 << " bit (reversed register order): " << hi
+                  << std::endl;
     }
 
     return {Instruction(type, addr, reg[1]), Instruction(type, addr + 1, reg[0])};
@@ -405,8 +383,8 @@ static std::vector<Instruction>
  */
 
 // big endian
-static std::vector<Instruction>
-        parse_u64abcdefgh(Instruction::register_type_t type, std::size_t addr, const std::string &value, int base, bool verbose) {
+static std::vector<Instruction> parse_u64abcdefgh(
+        Instruction::register_type_t type, std::size_t addr, const std::string &value, int base, bool verbose) {
     typedef uint64_t           int_t;
     cxxendian::Host_Int<int_t> hi(parse_int<int_t>(value, base));
     cxxendian::BE_Int<int_t>   ei(hi);
@@ -418,9 +396,7 @@ static std::vector<Instruction>
 
     i = ei.get();
 
-    if (verbose) {
-        std::cerr << "big endian unsigned integer " << sizeof(int_t) * 8 << " bit: " << hi << std::endl;
-    }
+    if (verbose) { std::cerr << "big endian unsigned integer " << sizeof(int_t) * 8 << " bit: " << hi << std::endl; }
 
     return {
             Instruction(type, addr, reg[0]),
@@ -431,8 +407,8 @@ static std::vector<Instruction>
 }
 
 // little endian
-static std::vector<Instruction>
-        parse_u64hgfedcba(Instruction::register_type_t type, std::size_t addr, const std::string &value, int base, bool verbose) {
+static std::vector<Instruction> parse_u64hgfedcba(
+        Instruction::register_type_t type, std::size_t addr, const std::string &value, int base, bool verbose) {
     typedef uint64_t           int_t;
     cxxendian::Host_Int<int_t> hi(parse_int<int_t>(value, base));
     cxxendian::LE_Int<int_t>   ei(hi);
@@ -444,9 +420,7 @@ static std::vector<Instruction>
 
     i = ei.get();
 
-    if (verbose) {
-        std::cerr << "little endian unsigned integer " << sizeof(int_t) * 8 << " bit: " << hi << std::endl;
-    }
+    if (verbose) { std::cerr << "little endian unsigned integer " << sizeof(int_t) * 8 << " bit: " << hi << std::endl; }
 
     return {
             Instruction(type, addr, reg[0]),
@@ -457,8 +431,8 @@ static std::vector<Instruction>
 }
 
 // big endian reversed
-static std::vector<Instruction>
-        parse_u64ghefcdab(Instruction::register_type_t type, std::size_t addr, const std::string &value, int base, bool verbose) {
+static std::vector<Instruction> parse_u64ghefcdab(
+        Instruction::register_type_t type, std::size_t addr, const std::string &value, int base, bool verbose) {
     typedef uint64_t           int_t;
     cxxendian::Host_Int<int_t> hi(parse_int<int_t>(value, base));
     cxxendian::BE_Int<int_t>   ei(hi);
@@ -471,7 +445,8 @@ static std::vector<Instruction>
     i = ei.get();
 
     if (verbose) {
-        std::cerr << "big endian unsigned integer " << sizeof(int_t) * 8 << " bit (reversed register order): " << hi << std::endl;
+        std::cerr << "big endian unsigned integer " << sizeof(int_t) * 8 << " bit (reversed register order): " << hi
+                  << std::endl;
     }
 
     return {
@@ -483,8 +458,8 @@ static std::vector<Instruction>
 }
 
 // little endian reversed
-static std::vector<Instruction>
-        parse_u64badcfehg(Instruction::register_type_t type, std::size_t addr, const std::string &value, int base, bool verbose) {
+static std::vector<Instruction> parse_u64badcfehg(
+        Instruction::register_type_t type, std::size_t addr, const std::string &value, int base, bool verbose) {
     typedef uint64_t           int_t;
     cxxendian::Host_Int<int_t> hi(parse_int<int_t>(value, base));
     cxxendian::LE_Int<int_t>   ei(hi);
@@ -497,7 +472,8 @@ static std::vector<Instruction>
     i = ei.get();
 
     if (verbose) {
-        std::cerr << "little endian unsigned integer " << sizeof(int_t) * 8 << " bit (reversed register order): " << hi << std::endl;
+        std::cerr << "little endian unsigned integer " << sizeof(int_t) * 8 << " bit (reversed register order): " << hi
+                  << std::endl;
     }
 
     return {
@@ -509,8 +485,8 @@ static std::vector<Instruction>
 }
 
 // big endian
-static std::vector<Instruction>
-        parse_i64abcdefgh(Instruction::register_type_t type, std::size_t addr, const std::string &value, int base, bool verbose) {
+static std::vector<Instruction> parse_i64abcdefgh(
+        Instruction::register_type_t type, std::size_t addr, const std::string &value, int base, bool verbose) {
     typedef int64_t            int_t;
     cxxendian::Host_Int<int_t> hi(parse_int<int_t>(value, base));
     cxxendian::BE_Int<int_t>   ei(hi);
@@ -522,9 +498,7 @@ static std::vector<Instruction>
 
     i = ei.get();
 
-    if (verbose) {
-        std::cerr << "big endian signed integer " << sizeof(int_t) * 8 << " bit: " << hi << std::endl;
-    }
+    if (verbose) { std::cerr << "big endian signed integer " << sizeof(int_t) * 8 << " bit: " << hi << std::endl; }
 
     return {
             Instruction(type, addr, reg[0]),
@@ -535,8 +509,8 @@ static std::vector<Instruction>
 }
 
 // little endian
-static std::vector<Instruction>
-        parse_i64hgfedcba(Instruction::register_type_t type, std::size_t addr, const std::string &value, int base, bool verbose) {
+static std::vector<Instruction> parse_i64hgfedcba(
+        Instruction::register_type_t type, std::size_t addr, const std::string &value, int base, bool verbose) {
     typedef int64_t            int_t;
     cxxendian::Host_Int<int_t> hi(parse_int<int_t>(value, base));
     cxxendian::LE_Int<int_t>   ei(hi);
@@ -548,9 +522,7 @@ static std::vector<Instruction>
 
     i = ei.get();
 
-    if (verbose) {
-        std::cerr << "little endian signed integer " << sizeof(int_t) * 8 << " bit: " << hi << std::endl;
-    }
+    if (verbose) { std::cerr << "little endian signed integer " << sizeof(int_t) * 8 << " bit: " << hi << std::endl; }
 
     return {
             Instruction(type, addr, reg[0]),
@@ -561,8 +533,8 @@ static std::vector<Instruction>
 }
 
 // big endian reversed
-static std::vector<Instruction>
-        parse_i64ghefcdab(Instruction::register_type_t type, std::size_t addr, const std::string &value, int base, bool verbose) {
+static std::vector<Instruction> parse_i64ghefcdab(
+        Instruction::register_type_t type, std::size_t addr, const std::string &value, int base, bool verbose) {
     typedef int64_t            int_t;
     cxxendian::Host_Int<int_t> hi(parse_int<int_t>(value, base));
     cxxendian::BE_Int<int_t>   ei(hi);
@@ -575,7 +547,8 @@ static std::vector<Instruction>
     i = ei.get();
 
     if (verbose) {
-        std::cerr << "big endian signed integer " << sizeof(int_t) * 8 << " bit (reversed register order): " << hi << std::endl;
+        std::cerr << "big endian signed integer " << sizeof(int_t) * 8 << " bit (reversed register order): " << hi
+                  << std::endl;
     }
 
     return {
@@ -587,8 +560,8 @@ static std::vector<Instruction>
 }
 
 // little endian reversed
-static std::vector<Instruction>
-        parse_i64badcfehg(Instruction::register_type_t type, std::size_t addr, const std::string &value, int base, bool verbose) {
+static std::vector<Instruction> parse_i64badcfehg(
+        Instruction::register_type_t type, std::size_t addr, const std::string &value, int base, bool verbose) {
     typedef int64_t            int_t;
     cxxendian::Host_Int<int_t> hi(parse_int<int_t>(value, base));
     cxxendian::LE_Int<int_t>   ei(hi);
@@ -601,7 +574,8 @@ static std::vector<Instruction>
     i = ei.get();
 
     if (verbose) {
-        std::cerr << "little endian signed integer " << sizeof(int_t) * 8 << " bit (reversed register order): " << hi << std::endl;
+        std::cerr << "little endian signed integer " << sizeof(int_t) * 8 << " bit (reversed register order): " << hi
+                  << std::endl;
     }
 
     return {

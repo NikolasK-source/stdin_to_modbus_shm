@@ -10,11 +10,11 @@
 #include "InputParser_float.hpp"
 
 #include <cxxendian.hpp>
+#include <iomanip>
+#include <iostream>
 #include <limits>
 #include <stdexcept>
 #include <type_traits>
-#include <iostream>
-#include <iomanip>
 
 namespace InputParser {
 
@@ -84,8 +84,8 @@ static float parse_float(const std::string &value) {
  * @return list of instructions
  */
 
-static std::vector<Instruction>
-        parse_f32abcd(Instruction::register_type_t type, std::size_t addr, const std::string &value, int, bool verbose) {
+static std::vector<Instruction> parse_f32abcd(
+        Instruction::register_type_t type, std::size_t addr, const std::string &value, int, bool verbose) {
     cxxendian::Host_Float<float> hf(parse_float(value));
     cxxendian::BE_Float<float>   bf(hf);
 
@@ -111,8 +111,8 @@ static std::vector<Instruction>
  * @param value string to convert
  * @return list of instructions
  */
-static std::vector<Instruction>
-        parse_f32cdab(Instruction::register_type_t type, std::size_t addr, const std::string &value, int, bool verbose) {
+static std::vector<Instruction> parse_f32cdab(
+        Instruction::register_type_t type, std::size_t addr, const std::string &value, int, bool verbose) {
     cxxendian::Host_Float<float> hf(parse_float(value));
     cxxendian::BE_Float<float>   bf(hf);
 
@@ -138,8 +138,8 @@ static std::vector<Instruction>
  * @param value string to convert
  * @return list of instructions
  */
-static std::vector<Instruction>
-        parse_f32dcba(Instruction::register_type_t type, std::size_t addr, const std::string &value, int, bool verbose) {
+static std::vector<Instruction> parse_f32dcba(
+        Instruction::register_type_t type, std::size_t addr, const std::string &value, int, bool verbose) {
     cxxendian::Host_Float<float> hf(parse_float(value));
     cxxendian::LE_Float<float>   lf(hf);
 
@@ -165,8 +165,8 @@ static std::vector<Instruction>
  * @param value string to convert
  * @return list of instructions
  */
-static std::vector<Instruction>
-        parse_f32badc(Instruction::register_type_t type, std::size_t addr, const std::string &value, int, bool verbose) {
+static std::vector<Instruction> parse_f32badc(
+        Instruction::register_type_t type, std::size_t addr, const std::string &value, int, bool verbose) {
     cxxendian::Host_Float<float> hf(parse_float(value));
     cxxendian::LE_Float<float>   lf(hf);
 
@@ -250,8 +250,8 @@ static double parse_double(const std::string &value) {
  * @param value string to convert
  * @return list of instructions
  */
-static std::vector<Instruction>
-        parse_f64abcdefgh(Instruction::register_type_t type, std::size_t addr, const std::string &value, int, bool verbose) {
+static std::vector<Instruction> parse_f64abcdefgh(
+        Instruction::register_type_t type, std::size_t addr, const std::string &value, int, bool verbose) {
     cxxendian::Host_Float<double> hd(parse_double(value));
     cxxendian::BE_Float<double>   bd(hd);
 
@@ -280,8 +280,8 @@ static std::vector<Instruction>
  * @param value string to convert
  * @return list of instructions
  */
-static std::vector<Instruction>
-        parse_f64hgfedcba(Instruction::register_type_t type, std::size_t addr, const std::string &value, int, bool verbose) {
+static std::vector<Instruction> parse_f64hgfedcba(
+        Instruction::register_type_t type, std::size_t addr, const std::string &value, int, bool verbose) {
     cxxendian::Host_Float<double> hd(parse_double(value));
     cxxendian::LE_Float<double>   ld(hd);
 
@@ -310,8 +310,8 @@ static std::vector<Instruction>
  * @param value string to convert
  * @return list of instructions
  */
-static std::vector<Instruction>
-        parse_f64ghefcdab(Instruction::register_type_t type, std::size_t addr, const std::string &value, int, bool verbose) {
+static std::vector<Instruction> parse_f64ghefcdab(
+        Instruction::register_type_t type, std::size_t addr, const std::string &value, int, bool verbose) {
     cxxendian::Host_Float<double> hd(parse_double(value));
     cxxendian::BE_Float<double>   bd(hd);
 
@@ -340,8 +340,8 @@ static std::vector<Instruction>
  * @param value string to convert
  * @return list of instructions
  */
-static std::vector<Instruction>
-        parse_f64badcfehg(Instruction::register_type_t type, std::size_t addr, const std::string &value, int, bool verbose) {
+static std::vector<Instruction> parse_f64badcfehg(
+        Instruction::register_type_t type, std::size_t addr, const std::string &value, int, bool verbose) {
     cxxendian::Host_Float<double> hd(parse_double(value));
     cxxendian::LE_Float<double>   ld(hd);
 
