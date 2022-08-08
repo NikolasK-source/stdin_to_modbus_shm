@@ -3,13 +3,15 @@
  * This program is free software. You can redistribute it and/or modify it under the terms of the MIT License.
  */
 
+#include "InputParser.hpp"
 #include "SHM.hpp"
-#include "input_parse.hpp"
 #include "license.hpp"
 
 #include <csignal>
+#include <cxxendian.hpp>
 #include <cxxopts.hpp>
 #include <filesystem>
+#include <iomanip>
 #include <iostream>
 #include <mutex>
 #include <sysexits.h>
@@ -54,6 +56,7 @@ int main(int argc, char **argv) {
                           "https://en.cppreference.com/w/cpp/string/basic_string/stoul)",
                           cxxopts::value<int>()->default_value("0"));
     options.add_options()("h,help", "print usage");
+    options.add_options()("v,verbose", "print what is written to the registers");
     options.add_options()("version", "print version information");
     options.add_options()("license", "show licenses");
 
@@ -98,6 +101,8 @@ int main(int argc, char **argv) {
         exit(EX_OK);
     }
 
+    const bool VERBOSE = args.count("verbose");
+
     // open shared memory objects
     const auto &name_prefix = args["name-prefix"].as<std::string>();
 
@@ -141,6 +146,13 @@ int main(int argc, char **argv) {
         exit(EX_SOFTWARE);
     }
 
+    if (VERBOSE) {
+        std::cerr << "DO registers: " << shm_do->get_size() << std::endl;
+        std::cerr << "DI registers: " << shm_di->get_size() << std::endl;
+        std::cerr << "AO registers: " << shm_ao->get_size() / 2 << std::endl;
+        std::cerr << "AI registers: " << shm_ai->get_size() / 2 << std::endl;
+    }
+
     if (shm_ao->get_size() % 2) {
         std::cerr << "the size of shared memory '" << shm_ao->get_name() << "' is odd. It is not a valid modbus shm."
                   << std::endl;
@@ -167,9 +179,9 @@ int main(int argc, char **argv) {
         std::string line;
         while (!terminate && std::getline(std::cin, line)) {
             // parse input
-            input_data_t input_data {};
+            std::vector<InputParser::Instruction> instructions;
             try {
-                parse_input(line, input_data, addr_base, value_base);
+                instructions = InputParser::parse(line, addr_base, value_base, VERBOSE);
             } catch (std::exception &e) {
                 std::cerr << "line '" << line << "' discarded: " << e.what() << std::endl;
                 continue;
@@ -177,43 +189,60 @@ int main(int argc, char **argv) {
 
             // write value to target
             std::lock_guard<std::mutex> guard(m);
-            switch (input_data.register_type) {
-                case input_data_t::register_type_t::DO:
-                    if (input_data.address >= do_elements) {
-                        std::cerr << "line '" << line << "' discarded: address out of range" << std::endl;
+            for (auto &input_data : instructions) {
+                switch (input_data.register_type) {
+                    case InputParser::Instruction::register_type_t::DO:
+                        if (input_data.address >= do_elements) {
+                            std::cerr << "line '" << line << "' discarded: address out of range" << std::endl;
+                            break;
+                        }
+                        shm_do->get_addr<uint8_t *>()[input_data.address] = input_data.value ? 1 : 0;
+                        if (VERBOSE) {
+                            std::cerr << "> write " << std::hex << "0x" << std::setw(2) << std::setfill('0')
+                                      << (input_data.value ? 1 : 0) << " to DO @0x" << std::setw(4)
+                                      << input_data.address << std::endl;
+                        }
                         break;
-                    }
-                    shm_do->get_addr<uint8_t *>()[input_data.address] = input_data.value ? 1 : 0;
-                    break;
-                case input_data_t::register_type_t::DI:
-                    if (input_data.address >= di_elements) {
-                        std::cerr << "line '" << line << "' discarded: address out of range" << std::endl;
+                    case InputParser::Instruction::register_type_t::DI:
+                        if (input_data.address >= di_elements) {
+                            std::cerr << "line '" << line << "' discarded: address out of range" << std::endl;
+                            break;
+                        }
+                        shm_di->get_addr<uint8_t *>()[input_data.address] = input_data.value ? 1 : 0;
+
+                        if (VERBOSE) {
+                            std::cerr << "> write " << std::hex << "0x" << std::setw(2) << std::setfill('0')
+                                      << (input_data.value ? 1 : 0) << " to DI @0x" << std::setw(4)
+                                      << input_data.address << std::endl;
+                        }
                         break;
-                    }
-                    shm_di->get_addr<uint8_t *>()[input_data.address] = input_data.value ? 1 : 0;
-                    break;
-                case input_data_t::register_type_t::AO:
-                    if (input_data.address >= ao_elements) {
-                        std::cerr << "line '" << line << "' discarded: address out of range" << std::endl;
+                    case InputParser::Instruction::register_type_t::AO:
+                        if (input_data.address >= ao_elements) {
+                            std::cerr << "line '" << line << "' discarded: address out of range" << std::endl;
+                            break;
+                        }
+                        shm_ao->get_addr<uint16_t *>()[input_data.address] = static_cast<uint16_t>(input_data.value);
+
+                        if (VERBOSE) {
+                            std::cerr << "> write " << std::hex << "0x" << std::setw(4) << std::setfill('0')
+                                      << input_data.value << " to AO @0x" << std::setw(4) << input_data.address
+                                      << std::endl;
+                        }
                         break;
-                    }
-                    if (input_data.value > std::numeric_limits<uint16_t>::max()) {
-                        std::cerr << "line '" << line << "' discarded: value out of range" << std::endl;
+                    case InputParser::Instruction::register_type_t::AI:
+                        if (input_data.address >= ai_elements) {
+                            std::cerr << "line '" << line << "' discarded: address out of range" << std::endl;
+                            break;
+                        }
+                        shm_ai->get_addr<uint16_t *>()[input_data.address] = static_cast<uint16_t>(input_data.value);
+
+                        if (VERBOSE) {
+                            std::cerr << "> write " << std::hex << "0x" << std::setw(4) << std::setfill('0')
+                                      << input_data.value << " to AI @0x" << std::setw(4) << input_data.address
+                                      << std::endl;
+                        }
                         break;
-                    }
-                    shm_ao->get_addr<uint16_t *>()[input_data.address] = static_cast<uint16_t>(input_data.value);
-                    break;
-                case input_data_t::register_type_t::AI:
-                    if (input_data.address >= ai_elements) {
-                        std::cerr << "line '" << line << "' discarded: address out of range" << std::endl;
-                        break;
-                    }
-                    if (input_data.value > std::numeric_limits<uint16_t>::max()) {
-                        std::cerr << "line '" << line << "' discarded: value out of range" << std::endl;
-                        break;
-                    }
-                    shm_ai->get_addr<uint16_t *>()[input_data.address] = static_cast<uint16_t>(input_data.value);
-                    break;
+                }
             }
         }
         terminate = true;
