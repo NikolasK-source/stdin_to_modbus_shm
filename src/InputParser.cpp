@@ -84,7 +84,7 @@ static const std::unordered_map<std::string, parse_function> PARSE_FUNCTIONS = {
         {"f64_little", parse_f64hgfedcba},
         {"f64l", parse_f64hgfedcba},
         {"f64_big", parse_f64abcdefgh},
-        {"f64_b", parse_f64abcdefgh},
+        {"f64b", parse_f64abcdefgh},
         {"f64_little_rev", parse_f64badcfehg},
         {"f64lr", parse_f64badcfehg},
         {"f64_big_rev", parse_f64ghefcdab},
@@ -144,7 +144,7 @@ static const std::unordered_map<std::string, parse_function> PARSE_FUNCTIONS = {
         {"u64_little", parse_u64hgfedcba},
         {"u64l", parse_u64hgfedcba},
         {"u64_big", parse_u64abcdefgh},
-        {"u64_b", parse_u64abcdefgh},
+        {"u64b", parse_u64abcdefgh},
         {"u64_little_rev", parse_u64badcfehg},
         {"u64lr", parse_u64badcfehg},
         {"u64_big_rev", parse_u64ghefcdab},
@@ -156,7 +156,7 @@ static const std::unordered_map<std::string, parse_function> PARSE_FUNCTIONS = {
         {"i64_little", parse_i64hgfedcba},
         {"i64l", parse_i64hgfedcba},
         {"i64_big", parse_i64abcdefgh},
-        {"i64_b", parse_i64abcdefgh},
+        {"i64b", parse_i64abcdefgh},
         {"i64_little_rev", parse_i64badcfehg},
         {"i64lr", parse_i64badcfehg},
         {"i64_big_rev", parse_i64ghefcdab},
@@ -183,20 +183,26 @@ std::vector<Instruction> parse(std::string line, int base_addr, int base_value, 
     }
 
     // convert value expressions
-    if (split_input[2] == "true" || split_input[2] == "one") {
+    if (split_input[2] == "true" || split_input[2] == "one" || split_input[2] == "high" || split_input[2] == "active" ||
+        split_input[2] == "on" || split_input[2] == "enabled") {
         split_input[2] = "1";
-    } else if (split_input[2] == "false" || split_input[2] == "zero") {
+    } else if (split_input[2] == "false" || split_input[2] == "zero" || split_input[2] == "low" ||
+               split_input[2] == "inactive" || split_input[2] == "off" || split_input[2] == "disabled") {
         split_input[2] = "0";
     } else if (split_input[2] == "pi") {
-        split_input[2] = "3.14159265358979323846";
+        split_input[2] = PI;
+    } else if (split_input[2] == "npi" || split_input[2] == "-pi") {
+        split_input[2] = NPI;
     } else if (split_input[2] == "sqrt2") {
-        split_input[2] = "1.41421356237309504880";
+        split_input[2] = SQRT2;
     } else if (split_input[2] == "sqrt3") {
-        split_input[2] = "1.73205080756887729352";
+        split_input[2] = SQRT3;
     } else if (split_input[2] == "phi") {
-        split_input[2] = "1.61803398874989484820";
+        split_input[2] = PHI;
     } else if (split_input[2] == "ln2") {
-        split_input[2] = "0.69314718055994530941";
+        split_input[2] = LN2;
+    } else if (split_input[2] == "e") {
+        split_input[2] = E;
     }
 
     // get register type

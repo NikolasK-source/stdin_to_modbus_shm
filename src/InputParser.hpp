@@ -11,6 +11,14 @@
 
 namespace InputParser {
 
+static constexpr const char *PI    = "3.14159265358979323846";
+static constexpr const char *NPI   = "-3.14159265358979323846";
+static constexpr const char *SQRT2 = "1.41421356237309504880";
+static constexpr const char *SQRT3 = "1.73205080756887729352";
+static constexpr const char *PHI   = "1.61803398874989484820";
+static constexpr const char *LN2   = "0.69314718055994530941";
+static constexpr const char *E     = "2.71828182845904523536";
+
 /**
  * @brief modbus write instruction
  */

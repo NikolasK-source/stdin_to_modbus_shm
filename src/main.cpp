@@ -59,6 +59,8 @@ int main(int argc, char **argv) {
     options.add_options()("v,verbose", "print what is written to the registers");
     options.add_options()("version", "print version information");
     options.add_options()("license", "show licenses");
+    options.add_options()("data-types", "show list of supported data type identifiers");
+    options.add_options()("constants", "list string constants that can be used as value");
 
     // parse arguments
     cxxopts::ParseResult args;
@@ -74,15 +76,21 @@ int main(int argc, char **argv) {
         options.set_width(120);
         std::cout << options.help() << std::endl;
         std::cout << std::endl;
-        std::cout << "Data input format: reg_type:address:value" << std::endl;
+        std::cout << "Data input format: reg_type:address:value[:data_type]" << std::endl;
         std::cout << "    reg_type: modbus register type:                         [do|di|ao|ai]" << std::endl;
         std::cout << "    address : address of the target register:               [0-" << MAX_MODBUS_REGS - 1 << "]"
                   << std::endl;
         std::cout << "    value   : value that is written to the target register: [0-"
                   << std::numeric_limits<uint16_t>::max() << "]" << std::endl;
+        std::cout << "              some string constants are available. Use --constants for more details."
+                  << std::endl;
         std::cout << "              For the registers do and di all numerical values different from 0 are interpreted "
                      "as 1."
                   << std::endl;
+        std::cout << "    data_type: an optional data type specifier. " << std::endl;
+        std::cout << "               If no data type is specified, exactly one register is written in host byte order."
+                  << std::endl;
+        std::cout << "               Use --data-types to get a list of supported data type identifiers." << std::endl;
         std::cout << std::endl;
         std::cout << "This application uses the following libraries:" << std::endl;
         std::cout << "  - cxxopts by jarro2783 (https://github.com/jarro2783/cxxopts)" << std::endl;
@@ -102,6 +110,133 @@ int main(int argc, char **argv) {
         print_licenses(std::cout);
         return EX_OK;
     }
+
+    // data type identifiers
+    if (args.count("data-types")) {
+        std::cout << "Supported data types:" << std::endl;
+        std::cout << "  - Float:" << std::endl;
+        std::cout << "      - 32 Bit:" << std::endl;
+        std::cout << "          - f32_abcd, f32_big, f32b                32-Bit floating point   in big endian"
+                  << std::endl;
+        std::cout << "          - f32_dcba, f32_little, f32l             32-Bit floating point   in little endian"
+                  << std::endl;
+        std::cout << "          - f32_cdab, f32_big_rev, f32br           32-Bit floating point   in big endian,     - "
+                     "reversed register order"
+                  << std::endl;
+        std::cout << "          - f32_badc, f32_little_rev, f32lr        32-Bit floating point   in little endian,  - "
+                     "reversed register order"
+                  << std::endl;
+        std::cout << "      - 64 Bit:" << std::endl;
+        std::cout << "          - f64_abcdefgh, f64_big, f64b            64-Bit floating point   in big endian"
+                  << std::endl;
+        std::cout << "          - f64_ghefcdab, f64_little, f64l         64-Bit floating point   in little endian"
+                  << std::endl;
+        std::cout << "          - f64_badcfehg, f64_big_rev, f64br       64-Bit floating point   in big endian,     - "
+                     "reversed register order"
+                  << std::endl;
+        std::cout << "          - f64_hgfedcba, f64_little_rev, f64lr    64-Bit floating point   in little endian,  - "
+                     "reversed register order"
+                  << std::endl;
+        std::cout << "  - Int:" << std::endl;
+        std::cout << "      - 8 Bit:" << std::endl;
+        std::cout << "          - u8_lo                                  8-Bit unsigned integer   written to low  byte "
+                     "of register"
+                  << std::endl;
+        std::cout << "          - u8_hi                                  8-Bit unsigned integer   written to high byte "
+                     "of register"
+                  << std::endl;
+        std::cout << "          - i8_lo                                  8-Bit   signed integer   written to low  byte "
+                     "of register"
+                  << std::endl;
+        std::cout << "          - i8_hi                                  8-Bit   signed integer   written to high byte "
+                     "of register"
+                  << std::endl;
+        std::cout << "      - 16 Bit" << std::endl;
+        std::cout << "          - u16_ab, u16_big, u16b                  16-Bit unsigned integer in big endian"
+                  << std::endl;
+        std::cout << "          - i16_ab, i16_big, i16b                  16-Bit signed integer   in big endian"
+                  << std::endl;
+        std::cout << "          - u16_ba, u16_little, u16l               16-Bit unsigned integer in little endian"
+                  << std::endl;
+        std::cout << "          - i16_ba, i16_little, i16l               16-Bit signed integer   in little endian"
+                  << std::endl;
+        std::cout << "      - 32 Bit:" << std::endl;
+        std::cout << "          - u32_abcd, u32_big, u32b                32-Bit unsigned integer in big endian"
+                  << std::endl;
+        std::cout << "          - i32_abcd, i32_big, i32b                32-Bit   signed integer in big endian"
+                  << std::endl;
+        std::cout << "          - u32_dcba, u32_little, u32l             32-Bit unsigned integer in little endian"
+                  << std::endl;
+        std::cout << "          - i32_dcba, i32_little, i32l             32-Bit   signed integer in little endian"
+                  << std::endl;
+        std::cout << "          - u32_cdab, u32_big_rev, u32br           32-Bit unsigned integer in big endian,     - "
+                     "reversed register order"
+                  << std::endl;
+        std::cout << "          - i32_cdab, i32_big_rev, i32br           32-Bit   signed integer in big endian,     - "
+                     "reversed register order"
+                  << std::endl;
+        std::cout << "          - u32_badc, u32_little_rev, u32lr        32-Bit unsigned integer in little endian,  - "
+                     "reversed register order"
+                  << std::endl;
+        std::cout << "          - i32_badc, i32_little_rev, i32lr        32-Bit   signed integer in little endian,  - "
+                     "reversed register order"
+                  << std::endl;
+        std::cout << "      - 64 Bit:" << std::endl;
+        std::cout << "          - u64_abcdefgh, u64_big, u64b            64-Bit unsigned integer in big endian"
+                  << std::endl;
+        std::cout << "          - i64_abcdefgh, i64_big, i64b            64-Bit   signed integer in big endian"
+                  << std::endl;
+        std::cout << "          - u64_hgfedcba, u64_little, u64l         64-Bit unsigned integer in little endian"
+                  << std::endl;
+        std::cout << "          - i64_hgfedcba, i64_little, i64l         64-Bit   signed integer in little endian"
+                  << std::endl;
+        std::cout << "          - u64_ghefcdab, u64_big_rev, u64br       64-Bit unsigned integer in big endian      - "
+                     "reversed register order"
+                  << std::endl;
+        std::cout << "          - i64_ghefcdab, i64_big_rev, i64br       64-Bit   signed integer in big endian      - "
+                     "reversed register order"
+                  << std::endl;
+        std::cout << "          - u64_badcfehg, u64_little_rev, u64lr    64-Bit unsigned integer in little endian,  - "
+                     "reversed register order"
+                  << std::endl;
+        std::cout << "          - i64_badcfehg, i64_little_rev, i64lr    64-Bit   signed integer in little endian,  - "
+                     "reversed register order"
+                  << std::endl;
+        std::cout << std::endl;
+        std::cout << "Note: The endianness refers to the layout of the data in the shared memory and may differ from "
+                     "the Modbus master's"
+                  << std::endl;
+        std::cout << "      definition of the endianness." << std::endl;
+        exit(EX_OK);
+    }
+
+    // print licenses
+    if (args.count("constants")) {
+        std::cout << "Known string constants:" << std::endl;
+        std::cout << "  true      1" << std::endl;
+        std::cout << "  one       1" << std::endl;
+        std::cout << "  high      1" << std::endl;
+        std::cout << "  active    1" << std::endl;
+        std::cout << "  on        1" << std::endl;
+        std::cout << "  enabled   1" << std::endl;
+        std::cout << "  false     0" << std::endl;
+        std::cout << "  zero      0" << std::endl;
+        std::cout << "  low       0" << std::endl;
+        std::cout << "  inactive  0" << std::endl;
+        std::cout << "  off       0" << std::endl;
+        std::cout << "  off       0" << std::endl;
+        std::cout << "  pi        " << InputParser::PI << std::endl;
+        std::cout << "  -pi       " << InputParser::NPI << std::endl;
+        std::cout << "  sqrt2     " << InputParser::SQRT2 << std::endl;
+        std::cout << "  sqrt3     " << InputParser::SQRT3 << std::endl;
+        std::cout << "  phi       " << InputParser::PHI << std::endl;
+        std::cout << "  ln2       " << InputParser::LN2 << std::endl;
+        std::cout << "  e         " << InputParser::E << std::endl;
+
+        exit(EX_OK);
+    }
+
+    const bool VERBOSE = args.count("verbose");
 
     // open shared memory objects
     const auto &name_prefix = args["name-prefix"].as<std::string>();
