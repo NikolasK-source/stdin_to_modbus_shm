@@ -1,0 +1,23 @@
+id: network.koesling.stdin-to-modbus-shm
+runtime: org.freedesktop.Platform
+runtime-version: '21.08'
+sdk: org.freedesktop.Sdk
+command: stdin-to-modbus-shm
+finish-args:
+  - --device=shm
+modules:
+  - name: stdin-to-modbus-shm
+    buildsystem: simple
+    build-commands:
+    # build
+    - mkdir build
+    - cmake -B build . -DCMAKE_BUILD_TYPE=Release -DCLANG_FORMAT=OFF -DCOMPILER_WARNINGS=OFF
+    - cmake --build build
+
+    # install
+    - mkdir -p "${FLATPAK_DEST}/bin"
+    - cp build/stdin-to-modbus-shm ${FLATPAK_DEST}/bin
+    sources:
+      - type: git
+        branch: release
+        url: https://github.com/NikolasK-source/stdin_to_modbus_shm.git
