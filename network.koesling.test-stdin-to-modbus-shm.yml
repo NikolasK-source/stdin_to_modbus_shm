@@ -2,11 +2,11 @@ id: network.koesling.test-stdin-to-modbus-shm
 runtime: org.freedesktop.Platform
 runtime-version: '21.08'
 sdk: org.freedesktop.Sdk
-command: stdin_to_modbus_shm
+command: stdin-to-modbus-shm
 finish-args:
   - --device=shm
 modules:
-  - name: stdin_to_modbus_shm
+  - name: stdin-to-modbus-shm
     buildsystem: simple
     build-commands:
     # build
@@ -16,8 +16,7 @@ modules:
 
     # install
     - mkdir -p "${FLATPAK_DEST}/bin"
-    - cp build/stdin_to_modbus_shm ${FLATPAK_DEST}/bin
-    - ls -lah ${FLATPAK_DEST}
+    - cp build/stdin-to-modbus-shm ${FLATPAK_DEST}/bin
     sources:
       - type: dir
         path: .
