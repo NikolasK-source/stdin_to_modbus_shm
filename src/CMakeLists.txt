@@ -2,14 +2,12 @@
 # ======================================================================================================================
 
 target_sources(${Target} PRIVATE main.cpp)
-target_sources(${Target} PRIVATE SHM.cpp)
 target_sources(${Target} PRIVATE license.cpp)
 
 
 # ---------------------------------------- header files (*.jpp, *.h, ...) ----------------------------------------------
 # ======================================================================================================================
 
-target_sources(${Target} PRIVATE SHM.hpp)
 target_sources(${Target} PRIVATE input_parse.hpp)
 target_sources(${Target} PRIVATE split_string.hpp)
 target_sources(${Target} PRIVATE license.hpp)

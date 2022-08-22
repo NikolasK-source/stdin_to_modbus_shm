@@ -3,7 +3,6 @@
  * This program is free software. You can redistribute it and/or modify it under the terms of the MIT License.
  */
 
-#include "SHM.hpp"
 #include "input_parse.hpp"
 #include "license.hpp"
 
@@ -14,6 +13,7 @@
 #include <mutex>
 #include <sysexits.h>
 #include <thread>
+#include "cxxshm.hpp"
 
 //! maximum number of modbus registers
 static constexpr std::size_t MAX_MODBUS_REGS = 0x10000;
@@ -36,7 +36,7 @@ int main(int argc, char **argv) {
     // establish signal handler
     static volatile bool terminate   = false;
     auto                 sig_handler = [](int) { terminate = true; };
-    if (signal(SIGINT, sig_handler) || signal(SIGTERM, sig_handler)) {
+    if (signal(SIGINT, sig_handler) == SIG_ERR || signal(SIGTERM, sig_handler) == SIG_ERR) {
         perror("Failed to establish signal handler");
         exit(EX_OSERR);
     }
@@ -83,7 +83,8 @@ int main(int argc, char **argv) {
         std::cout << std::endl;
         std::cout << "This application uses the following libraries:" << std::endl;
         std::cout << "  - cxxopts by jarro2783 (https://github.com/jarro2783/cxxopts)" << std::endl;
-        exit(EX_OK);
+        std::cout << "  - cxxshm (https://github.com/NikolasK-source/cxxshm)" << std::endl;
+        return EX_OK;
     }
 
     // print version
@@ -96,62 +97,62 @@ int main(int argc, char **argv) {
     // print licenses
     if (args.count("license")) {
         print_licenses(std::cout);
-        exit(EX_OK);
+        return EX_OK;
     }
 
     // open shared memory objects
     const auto &name_prefix = args["name-prefix"].as<std::string>();
 
-    std::unique_ptr<SHM> shm_do;
-    std::unique_ptr<SHM> shm_di;
-    std::unique_ptr<SHM> shm_ao;
-    std::unique_ptr<SHM> shm_ai;
+    std::unique_ptr<cxxshm::SharedMemory> shm_do;
+    std::unique_ptr<cxxshm::SharedMemory> shm_di;
+    std::unique_ptr<cxxshm::SharedMemory> shm_ao;
+    std::unique_ptr<cxxshm::SharedMemory> shm_ai;
 
     try {
-        shm_do = std::make_unique<SHM>(name_prefix + "DO");
-        shm_di = std::make_unique<SHM>(name_prefix + "DI");
-        shm_ao = std::make_unique<SHM>(name_prefix + "AO");
-        shm_ai = std::make_unique<SHM>(name_prefix + "AI");
+        shm_do = std::make_unique<cxxshm::SharedMemory>(name_prefix + "DO");
+        shm_di = std::make_unique<cxxshm::SharedMemory>(name_prefix + "DI");
+        shm_ao = std::make_unique<cxxshm::SharedMemory>(name_prefix + "AO");
+        shm_ai = std::make_unique<cxxshm::SharedMemory>(name_prefix + "AI");
     } catch (const std::system_error &e) {
         std::cerr << e.what() << std::endl;
-        exit(EX_OSERR);
+        return EX_OSERR;
     }
 
     // check shared mem
     if (shm_do->get_size() > MAX_MODBUS_REGS) {
         std::cerr << "shared memory '" << shm_do->get_name() << "is to large to be a valid modbus shared memory."
                   << std::endl;
-        exit(EX_SOFTWARE);
+        return EX_SOFTWARE;
     }
 
     if (shm_di->get_size() > MAX_MODBUS_REGS) {
         std::cerr << "shared memory '" << shm_di->get_name() << "' is to large to be a valid modbus shared memory."
                   << std::endl;
-        exit(EX_SOFTWARE);
+        return EX_SOFTWARE;
     }
 
     if (shm_ao->get_size() / 2 > MAX_MODBUS_REGS) {
         std::cerr << "shared memory '" << shm_ao->get_name() << "' is to large to be a valid modbus shared memory."
                   << std::endl;
-        exit(EX_SOFTWARE);
+        return EX_SOFTWARE;
     }
 
     if (shm_ai->get_size() / 2 > MAX_MODBUS_REGS) {
         std::cerr << "shared memory '" << shm_ai->get_name() << "' is to large to be a valid modbus shared memory."
                   << std::endl;
-        exit(EX_SOFTWARE);
+        return EX_SOFTWARE;
     }
 
     if (shm_ao->get_size() % 2) {
         std::cerr << "the size of shared memory '" << shm_ao->get_name() << "' is odd. It is not a valid modbus shm."
                   << std::endl;
-        exit(EX_SOFTWARE);
+        return EX_SOFTWARE;
     }
 
     if (shm_ai->get_size() % 2) {
         std::cerr << "the size of shared memory '" << shm_ai->get_name() << "' is odd. It is not a valid modbus shm."
                   << std::endl;
-        exit(EX_SOFTWARE);
+        return EX_SOFTWARE;
     }
 
     const std::size_t do_elements = shm_do->get_size();
