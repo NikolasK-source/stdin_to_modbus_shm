@@ -6,6 +6,7 @@
 #include "input_parse.hpp"
 #include "license.hpp"
 
+#include "cxxshm.hpp"
 #include <csignal>
 #include <cxxopts.hpp>
 #include <filesystem>
@@ -13,7 +14,6 @@
 #include <mutex>
 #include <sysexits.h>
 #include <thread>
-#include "cxxshm.hpp"
 
 //! maximum number of modbus registers
 static constexpr std::size_t MAX_MODBUS_REGS = 0x10000;
