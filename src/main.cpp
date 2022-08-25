@@ -18,6 +18,7 @@
 #include <mutex>
 #include <sysexits.h>
 #include <thread>
+#include <unistd.h>
 
 //! maximum number of modbus registers
 static constexpr std::size_t MAX_MODBUS_REGS = 0x10000;
