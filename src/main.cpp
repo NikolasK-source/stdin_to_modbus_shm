@@ -8,6 +8,7 @@
 #include "readline.hpp"
 
 #include "cxxshm.hpp"
+#include <array>
 #include <chrono>
 #include <csignal>
 #include <cxxendian/endian.hpp>
@@ -29,6 +30,17 @@ static constexpr double MIN_BASH_SLEEP = 0.1;
 //! number of digits that have to be printed for bash sleep instructions
 constexpr int SLEEP_DIGITS = 1;
 
+constexpr std::array<int, 10> TERM_SIGNALS = {SIGINT,
+                                              SIGTERM,
+                                              SIGHUP,
+                                              SIGIO,  // should not happen
+                                              SIGPIPE,
+                                              SIGPOLL,  // should not happen
+                                              SIGPROF,  // should not happen
+                                              SIGUSR1,
+                                              SIGUSR2,
+                                              SIGVTALRM};
+
 /*! \brief main function
  *
  * @param argc number of arguments
@@ -45,11 +57,16 @@ int main(int argc, char **argv) {
     };
 
     // establish signal handler
-    static volatile bool terminate   = false;
-    auto                 sig_handler = [](int) { terminate = true; };
-    if (signal(SIGINT, sig_handler) == SIG_ERR || signal(SIGTERM, sig_handler) == SIG_ERR) {
-        perror("Failed to establish signal handler");
-        exit(EX_OSERR);
+    static volatile bool terminate = false;
+    struct sigaction     term_sa;
+    term_sa.sa_handler = [](int) { terminate = true; };
+    term_sa.sa_flags   = SA_RESTART;
+    sigemptyset(&term_sa.sa_mask);
+    for (const auto SIGNO : TERM_SIGNALS) {
+        if (sigaction(SIGNO, &term_sa, nullptr)) {
+            perror("Failed to establish signal handler");
+            return EX_OSERR;
+        }
     }
 
     // all command line arguments
@@ -253,11 +270,11 @@ int main(int argc, char **argv) {
     const bool VERBOSE          = args.count("verbose");
     const bool PASSTHROUGH      = args.count("passthrough");
     const bool PASSTHROUGH_BASH = args.count("bash");
-    const bool HISTORY          = isatty(STDIN_FILENO) == 1;  // enable command history if input is tty
+    const bool INTERACTIVE      = isatty(STDIN_FILENO) == 1;  // enable command history if input is tty
     const bool VALID_HIST       = args.count("valid-hist");
 
     std::unique_ptr<Readline> readline;
-    if (HISTORY) { readline = std::make_unique<Readline>(); }
+    if (INTERACTIVE) { readline = std::make_unique<Readline>(); }
 
     const std::string REGISTER_ENDIAN = endian::HostEndianness.isBig() ? "u16b" : "u16l";
 
@@ -349,7 +366,7 @@ int main(int argc, char **argv) {
     auto input_thread_func = [&] {
         while (!terminate) {
             std::string line;
-            if (HISTORY) {
+            if (INTERACTIVE) {
                 try {
                     line = readline->get_line();
                 } catch (const std::runtime_error &) {
@@ -491,5 +508,5 @@ int main(int argc, char **argv) {
     }
 
     std::lock_guard<std::mutex> guard(m);  // wait until the thread is not within a critical section
-    std::cerr << std::endl << "Terminating ..." << std::endl;
+    if (INTERACTIVE) std::cerr << std::endl << "Terminating ..." << std::endl;
 }
