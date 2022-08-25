@@ -104,6 +104,7 @@ int main(int argc, char **argv) {
         std::cout << "This application uses the following libraries:" << std::endl;
         std::cout << "  - cxxopts by jarro2783 (https://github.com/jarro2783/cxxopts)" << std::endl;
         std::cout << "  - cxxshm (https://github.com/NikolasK-source/cxxshm)" << std::endl;
+        std::cout << "  - cxxendian (https://github.com/NikolasK-source/cxxendian)" << std::endl;
         return EX_OK;
     }
 
