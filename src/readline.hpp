@@ -15,9 +15,13 @@ public:
      * @brief initialize readline
      *
      * @details
-     * Disables the readline library signal handling
+     * - Disables the readline library signal handling
+     * - Output to stderr instead of stdout --> passthrough option still works
      */
-    Readline() { rl_catch_signals = 0; }
+    Readline() {
+        rl_catch_signals = 0;
+        rl_outstream     = stderr;
+    }
 
     /**
      * @brief disable readline
