@@ -3,20 +3,43 @@
  * This program is free software. You can redistribute it and/or modify it under the terms of the MIT License.
  */
 
-#include "input_parse.hpp"
+#include "InputParser.hpp"
 #include "license.hpp"
+#include "readline.hpp"
 
 #include "cxxshm.hpp"
+#include <array>
+#include <chrono>
 #include <csignal>
+#include <cxxendian/endian.hpp>
 #include <cxxopts.hpp>
 #include <filesystem>
+#include <iomanip>
 #include <iostream>
 #include <mutex>
 #include <sysexits.h>
 #include <thread>
+#include <unistd.h>
 
 //! maximum number of modbus registers
 static constexpr std::size_t MAX_MODBUS_REGS = 0x10000;
+
+//! minimum time to sleep (bash script passthrough)
+static constexpr double MIN_BASH_SLEEP = 0.1;
+
+//! number of digits that have to be printed for bash sleep instructions
+constexpr int SLEEP_DIGITS = 1;
+
+constexpr std::array<int, 10> TERM_SIGNALS = {SIGINT,
+                                              SIGTERM,
+                                              SIGHUP,
+                                              SIGIO,  // should not happen
+                                              SIGPIPE,
+                                              SIGPOLL,  // should not happen
+                                              SIGPROF,  // should not happen
+                                              SIGUSR1,
+                                              SIGUSR2,
+                                              SIGVTALRM};
 
 /*! \brief main function
  *
@@ -34,11 +57,16 @@ int main(int argc, char **argv) {
     };
 
     // establish signal handler
-    static volatile bool terminate   = false;
-    auto                 sig_handler = [](int) { terminate = true; };
-    if (signal(SIGINT, sig_handler) == SIG_ERR || signal(SIGTERM, sig_handler) == SIG_ERR) {
-        perror("Failed to establish signal handler");
-        exit(EX_OSERR);
+    static volatile bool terminate = false;
+    struct sigaction     term_sa {};
+    term_sa.sa_handler = [](int) { terminate = true; };
+    term_sa.sa_flags   = SA_RESTART;
+    sigemptyset(&term_sa.sa_mask);
+    for (const auto SIGNO : TERM_SIGNALS) {
+        if (sigaction(SIGNO, &term_sa, nullptr)) {
+            perror("Failed to establish signal handler");
+            return EX_OSERR;
+        }
     }
 
     // all command line arguments
@@ -53,9 +81,15 @@ int main(int argc, char **argv) {
                           "Numerical base (radix) that is used for the values (see "
                           "https://en.cppreference.com/w/cpp/string/basic_string/stoul)",
                           cxxopts::value<int>()->default_value("0"));
+    options.add_options()("p,passthrough", "write passthrough all executed commands to stdout");
+    options.add_options()("bash", "passthrough as bash script. No effect i '--passthrough' is not set");
+    options.add_options()("valid-hist", "add only valid commands to command history");
     options.add_options()("h,help", "print usage");
+    options.add_options()("v,verbose", "print what is written to the registers");
     options.add_options()("version", "print version information");
     options.add_options()("license", "show licenses");
+    options.add_options()("data-types", "show list of supported data type identifiers");
+    options.add_options()("constants", "list string constants that can be used as value");
 
     // parse arguments
     cxxopts::ParseResult args;
@@ -66,24 +100,46 @@ int main(int argc, char **argv) {
         exit_usage();
     }
 
+    auto print_format = [](bool help = false) {
+        std::cout << "Data input format: reg_type:address:value[:data_type]" << std::endl;
+        std::cout << "    reg_type : modbus register type:           [do|di|ao|ai]" << std::endl;
+        std::cout << "    address  : address of the target register: [0-" << MAX_MODBUS_REGS - 1 << "]" << std::endl;
+        std::cout << "               The actual maximum register depends on the size of the modbus shared memory."
+                  << std::endl;
+        std::cout << "    value    : value that is written to the target register" << std::endl;
+        std::cout << "               Some string constants are available. The input format depends on the type of "
+                     "register and data type."
+                  << std::endl;
+        if (help) std::cout << "               Use --constants for more details.";
+        else
+            std::cout << "               Type 'help constants' for more details ";
+        std::cout << std::endl;
+        std::cout << "               For the registers do and di all numerical values different from 0 are interpreted "
+                     "as 1."
+                  << std::endl;
+        std::cout << "    data_type: an optional data type specifier" << std::endl;
+        std::cout << "               If no data type is specified, exactly one register is written in host byte order."
+                  << std::endl;
+        if (help)
+            std::cout << "               Use --data-types to get a list of supported data type identifiers."
+                      << std::endl;
+        else
+            std::cout << "               Type 'help types' to get a list of supported data type identifiers."
+                      << std::endl;
+    };
+
     // print usage
     if (args.count("help")) {
         options.set_width(120);
         std::cout << options.help() << std::endl;
         std::cout << std::endl;
-        std::cout << "Data input format: reg_type:address:value" << std::endl;
-        std::cout << "    reg_type: modbus register type:                         [do|di|ao|ai]" << std::endl;
-        std::cout << "    address : address of the target register:               [0-" << MAX_MODBUS_REGS - 1 << "]"
-                  << std::endl;
-        std::cout << "    value   : value that is written to the target register: [0-"
-                  << std::numeric_limits<uint16_t>::max() << "]" << std::endl;
-        std::cout << "              For the registers do and di all numerical values different from 0 are interpreted "
-                     "as 1."
-                  << std::endl;
+        print_format();
         std::cout << std::endl;
         std::cout << "This application uses the following libraries:" << std::endl;
         std::cout << "  - cxxopts by jarro2783 (https://github.com/jarro2783/cxxopts)" << std::endl;
         std::cout << "  - cxxshm (https://github.com/NikolasK-source/cxxshm)" << std::endl;
+        std::cout << "  - cxxendian (https://github.com/NikolasK-source/cxxendian)" << std::endl;
+        std::cout << "  - GNU Readline (http://git.savannah.gnu.org/cgit/readline.git/)" << std::endl;
         return EX_OK;
     }
 
@@ -99,6 +155,149 @@ int main(int argc, char **argv) {
         print_licenses(std::cout);
         return EX_OK;
     }
+
+    auto print_data_types = []() {
+        std::cout << "Supported data types:" << std::endl;
+        std::cout << "  - Float:" << std::endl;
+        std::cout << "      - 32 Bit:" << std::endl;
+        std::cout << "          - f32_abcd, f32_big, f32b                32-Bit floating point   in big endian"
+                  << std::endl;
+        std::cout << "          - f32_dcba, f32_little, f32l             32-Bit floating point   in little endian"
+                  << std::endl;
+        std::cout << "          - f32_cdab, f32_big_rev, f32br           32-Bit floating point   in big endian,     - "
+                     "reversed register order"
+                  << std::endl;
+        std::cout << "          - f32_badc, f32_little_rev, f32lr        32-Bit floating point   in little endian,  - "
+                     "reversed register order"
+                  << std::endl;
+        std::cout << "      - 64 Bit:" << std::endl;
+        std::cout << "          - f64_abcdefgh, f64_big, f64b            64-Bit floating point   in big endian"
+                  << std::endl;
+        std::cout << "          - f64_ghefcdab, f64_little, f64l         64-Bit floating point   in little endian"
+                  << std::endl;
+        std::cout << "          - f64_badcfehg, f64_big_rev, f64br       64-Bit floating point   in big endian,     - "
+                     "reversed register order"
+                  << std::endl;
+        std::cout << "          - f64_hgfedcba, f64_little_rev, f64lr    64-Bit floating point   in little endian,  - "
+                     "reversed register order"
+                  << std::endl;
+        std::cout << "  - Int:" << std::endl;
+        std::cout << "      - 8 Bit:" << std::endl;
+        std::cout << "          - u8_lo                                  8-Bit unsigned integer   written to low  byte "
+                     "of register"
+                  << std::endl;
+        std::cout << "          - u8_hi                                  8-Bit unsigned integer   written to high byte "
+                     "of register"
+                  << std::endl;
+        std::cout << "          - i8_lo                                  8-Bit   signed integer   written to low  byte "
+                     "of register"
+                  << std::endl;
+        std::cout << "          - i8_hi                                  8-Bit   signed integer   written to high byte "
+                     "of register"
+                  << std::endl;
+        std::cout << "      - 16 Bit" << std::endl;
+        std::cout << "          - u16_ab, u16_big, u16b                  16-Bit unsigned integer in big endian"
+                  << std::endl;
+        std::cout << "          - i16_ab, i16_big, i16b                  16-Bit signed integer   in big endian"
+                  << std::endl;
+        std::cout << "          - u16_ba, u16_little, u16l               16-Bit unsigned integer in little endian"
+                  << std::endl;
+        std::cout << "          - i16_ba, i16_little, i16l               16-Bit signed integer   in little endian"
+                  << std::endl;
+        std::cout << "      - 32 Bit:" << std::endl;
+        std::cout << "          - u32_abcd, u32_big, u32b                32-Bit unsigned integer in big endian"
+                  << std::endl;
+        std::cout << "          - i32_abcd, i32_big, i32b                32-Bit   signed integer in big endian"
+                  << std::endl;
+        std::cout << "          - u32_dcba, u32_little, u32l             32-Bit unsigned integer in little endian"
+                  << std::endl;
+        std::cout << "          - i32_dcba, i32_little, i32l             32-Bit   signed integer in little endian"
+                  << std::endl;
+        std::cout << "          - u32_cdab, u32_big_rev, u32br           32-Bit unsigned integer in big endian,     - "
+                     "reversed register order"
+                  << std::endl;
+        std::cout << "          - i32_cdab, i32_big_rev, i32br           32-Bit   signed integer in big endian,     - "
+                     "reversed register order"
+                  << std::endl;
+        std::cout << "          - u32_badc, u32_little_rev, u32lr        32-Bit unsigned integer in little endian,  - "
+                     "reversed register order"
+                  << std::endl;
+        std::cout << "          - i32_badc, i32_little_rev, i32lr        32-Bit   signed integer in little endian,  - "
+                     "reversed register order"
+                  << std::endl;
+        std::cout << "      - 64 Bit:" << std::endl;
+        std::cout << "          - u64_abcdefgh, u64_big, u64b            64-Bit unsigned integer in big endian"
+                  << std::endl;
+        std::cout << "          - i64_abcdefgh, i64_big, i64b            64-Bit   signed integer in big endian"
+                  << std::endl;
+        std::cout << "          - u64_hgfedcba, u64_little, u64l         64-Bit unsigned integer in little endian"
+                  << std::endl;
+        std::cout << "          - i64_hgfedcba, i64_little, i64l         64-Bit   signed integer in little endian"
+                  << std::endl;
+        std::cout << "          - u64_ghefcdab, u64_big_rev, u64br       64-Bit unsigned integer in big endian      - "
+                     "reversed register order"
+                  << std::endl;
+        std::cout << "          - i64_ghefcdab, i64_big_rev, i64br       64-Bit   signed integer in big endian      - "
+                     "reversed register order"
+                  << std::endl;
+        std::cout << "          - u64_badcfehg, u64_little_rev, u64lr    64-Bit unsigned integer in little endian,  - "
+                     "reversed register order"
+                  << std::endl;
+        std::cout << "          - i64_badcfehg, i64_little_rev, i64lr    64-Bit   signed integer in little endian,  - "
+                     "reversed register order"
+                  << std::endl;
+        std::cout << std::endl;
+        std::cout << "Note: The endianness refers to the layout of the data in the shared memory and may differ from "
+                     "the Modbus master's"
+                  << std::endl;
+        std::cout << "      definition of the endianness." << std::endl;
+    };
+
+    // data type identifiers
+    if (args.count("data-types")) {
+        print_data_types();
+        return EX_OK;
+    }
+
+    auto print_constants = []() {
+        std::cout << "Known string constants:" << std::endl;
+        std::cout << "  true      1" << std::endl;
+        std::cout << "  one       1" << std::endl;
+        std::cout << "  high      1" << std::endl;
+        std::cout << "  active    1" << std::endl;
+        std::cout << "  on        1" << std::endl;
+        std::cout << "  enabled   1" << std::endl;
+        std::cout << "  false     0" << std::endl;
+        std::cout << "  zero      0" << std::endl;
+        std::cout << "  low       0" << std::endl;
+        std::cout << "  inactive  0" << std::endl;
+        std::cout << "  off       0" << std::endl;
+        std::cout << "  off       0" << std::endl;
+        std::cout << "  pi        " << InputParser::PI << std::endl;
+        std::cout << "  -pi      " << InputParser::NPI << std::endl;
+        std::cout << "  sqrt2     " << InputParser::SQRT2 << std::endl;
+        std::cout << "  sqrt3     " << InputParser::SQRT3 << std::endl;
+        std::cout << "  phi       " << InputParser::PHI << std::endl;
+        std::cout << "  ln2       " << InputParser::LN2 << std::endl;
+        std::cout << "  e         " << InputParser::E << std::endl;
+    };
+
+    // print licenses
+    if (args.count("constants")) {
+        print_constants();
+        return EX_OK;
+    }
+
+    const bool VERBOSE          = args.count("verbose");
+    const bool PASSTHROUGH      = args.count("passthrough");
+    const bool PASSTHROUGH_BASH = args.count("bash");
+    const bool INTERACTIVE      = isatty(STDIN_FILENO) == 1;  // enable command history if input is tty
+    const bool VALID_HIST       = args.count("valid-hist");
+
+    std::unique_ptr<Readline> readline;
+    if (INTERACTIVE) { readline = std::make_unique<Readline>(); }
+
+    const std::string REGISTER_ENDIAN = endian::HostEndianness.isBig() ? "u16b" : "u16l";
 
     // open shared memory objects
     const auto &name_prefix = args["name-prefix"].as<std::string>();
@@ -143,6 +342,13 @@ int main(int argc, char **argv) {
         return EX_SOFTWARE;
     }
 
+    if (VERBOSE) {
+        std::cerr << "DO registers: " << shm_do->get_size() << std::endl;
+        std::cerr << "DI registers: " << shm_di->get_size() << std::endl;
+        std::cerr << "AO registers: " << shm_ao->get_size() / 2 << std::endl;
+        std::cerr << "AI registers: " << shm_ai->get_size() / 2 << std::endl;
+    }
+
     if (shm_ao->get_size() % 2) {
         std::cerr << "the size of shared memory '" << shm_ao->get_name() << "' is odd. It is not a valid modbus shm."
                   << std::endl;
@@ -165,57 +371,176 @@ int main(int argc, char **argv) {
 
     std::mutex m;  // to ensure that the program is not terminated while it writes to a shared memory
 
+    std::cout << std::fixed;
+
+    auto last_time  = std::chrono::steady_clock::now();
+    auto bash_sleep = [&last_time]() {
+        auto this_time  = std::chrono::steady_clock::now();
+        auto ms         = std::chrono::duration_cast<std::chrono::milliseconds>(this_time - last_time).count();
+        auto sleep_time = static_cast<double>(ms) / 1000.0;
+        if (sleep_time > MIN_BASH_SLEEP) {
+            last_time = this_time;
+            std::cout << "sleep " << std::setprecision(SLEEP_DIGITS) << sleep_time << std::endl;
+        }
+    };
+
     auto input_thread_func = [&] {
-        std::string line;
-        while (!terminate && std::getline(std::cin, line)) {
+        while (!terminate) {
+            std::string line;
+            if (INTERACTIVE) {
+                try {
+                    line = readline->get_line(">>> ");
+                } catch (const std::runtime_error &) {
+                    // eof
+                    break;
+                }
+
+                if (line == "exit") break;
+
+                if (line == "help") {
+                    std::cout << "usage: help {format, constants, types}" << std::endl;
+                    std::cout << std::endl;
+                    std::cout << "    Type 'exit' to exit the application." << std::endl;
+                    continue;
+                }
+
+                if (line == "help format") {
+                    print_format(false);
+                    add_history(line.c_str());
+                    continue;
+                }
+
+                if (line == "help constants") {
+                    print_constants();
+                    add_history(line.c_str());
+                    continue;
+                }
+
+                if (line == "help types") {
+                    print_data_types();
+                    add_history(line.c_str());
+                    continue;
+                }
+
+            } else {
+                if (!std::getline(std::cin, line)) break;
+            }
+
+            if (!line.empty() && !VALID_HIST) add_history(line.c_str());
+
             // parse input
-            input_data_t input_data {};
+            std::vector<InputParser::Instruction> instructions;
             try {
-                parse_input(line, input_data, addr_base, value_base);
+                instructions = InputParser::parse(line, addr_base, value_base, VERBOSE);
             } catch (std::exception &e) {
                 std::cerr << "line '" << line << "' discarded: " << e.what() << std::endl;
                 continue;
             }
 
+            if (VALID_HIST) add_history(line.c_str());
+
             // write value to target
             std::lock_guard<std::mutex> guard(m);
-            switch (input_data.register_type) {
-                case input_data_t::register_type_t::DO:
-                    if (input_data.address >= do_elements) {
-                        std::cerr << "line '" << line << "' discarded: address out of range" << std::endl;
+            for (auto &input_data : instructions) {
+                switch (input_data.register_type) {
+                    case InputParser::Instruction::register_type_t::DO: {
+                        if (input_data.address >= do_elements) {
+                            std::cerr << "line '" << line << "' discarded: address out of range" << std::endl;
+                            break;
+                        }
+                        uint8_t value                                     = input_data.value ? 1 : 0;
+                        shm_do->get_addr<uint8_t *>()[input_data.address] = value;
+                        if (VERBOSE) {
+                            std::cerr << "> write " << std::hex << "0x" << std::setw(2) << std::setfill('0') << value
+                                      << " to DO @0x" << std::setw(4) << input_data.address << std::endl;
+                        }
+
+                        if (PASSTHROUGH) {
+                            if (PASSTHROUGH_BASH) {
+                                bash_sleep();
+                                std::cout << "echo '";
+                            }
+                            std::cout << "do:" << input_data.address << ':' << static_cast<int>(value);
+                            if (PASSTHROUGH_BASH) std::cout << "'";
+                            std::cout << std::endl;
+                        }
+
                         break;
                     }
-                    shm_do->get_addr<uint8_t *>()[input_data.address] = input_data.value ? 1 : 0;
-                    break;
-                case input_data_t::register_type_t::DI:
-                    if (input_data.address >= di_elements) {
-                        std::cerr << "line '" << line << "' discarded: address out of range" << std::endl;
+                    case InputParser::Instruction::register_type_t::DI: {
+                        if (input_data.address >= di_elements) {
+                            std::cerr << "line '" << line << "' discarded: address out of range" << std::endl;
+                            break;
+                        }
+                        uint8_t value                                     = input_data.value ? 1 : 0;
+                        shm_di->get_addr<uint8_t *>()[input_data.address] = value;
+
+                        if (VERBOSE) {
+                            std::cerr << "> write " << std::hex << "0x" << std::setw(2) << std::setfill('0') << value
+                                      << " to DI @0x" << std::setw(4) << input_data.address << std::endl;
+                        }
+
+                        if (PASSTHROUGH) {
+                            if (PASSTHROUGH_BASH) {
+                                bash_sleep();
+                                std::cout << "echo '";
+                            }
+                            std::cout << "di:" << input_data.address << ':' << static_cast<int>(value);
+                            if (PASSTHROUGH_BASH) std::cout << "'";
+                            std::cout << std::endl;
+                        }
+
                         break;
                     }
-                    shm_di->get_addr<uint8_t *>()[input_data.address] = input_data.value ? 1 : 0;
-                    break;
-                case input_data_t::register_type_t::AO:
-                    if (input_data.address >= ao_elements) {
-                        std::cerr << "line '" << line << "' discarded: address out of range" << std::endl;
+                    case InputParser::Instruction::register_type_t::AO:
+                        if (input_data.address >= ao_elements) {
+                            std::cerr << "line '" << line << "' discarded: address out of range" << std::endl;
+                            break;
+                        }
+                        shm_ao->get_addr<uint16_t *>()[input_data.address] = static_cast<uint16_t>(input_data.value);
+
+                        if (VERBOSE) {
+                            std::cerr << "> write " << std::hex << "0x" << std::setw(4) << std::setfill('0')
+                                      << input_data.value << " to AO @0x" << std::setw(4) << input_data.address
+                                      << std::endl;
+                        }
+
+                        if (PASSTHROUGH) {
+                            if (PASSTHROUGH_BASH) {
+                                bash_sleep();
+                                std::cout << "echo '";
+                            }
+                            std::cout << "ao:" << input_data.address << ':' << static_cast<uint16_t>(input_data.value)
+                                      << ':' << REGISTER_ENDIAN;
+                            if (PASSTHROUGH_BASH) std::cout << "'";
+                            std::cout << std::endl;
+                        }
                         break;
-                    }
-                    if (input_data.value > std::numeric_limits<uint16_t>::max()) {
-                        std::cerr << "line '" << line << "' discarded: value out of range" << std::endl;
+                    case InputParser::Instruction::register_type_t::AI:
+                        if (input_data.address >= ai_elements) {
+                            std::cerr << "line '" << line << "' discarded: address out of range" << std::endl;
+                            break;
+                        }
+                        shm_ai->get_addr<uint16_t *>()[input_data.address] = static_cast<uint16_t>(input_data.value);
+
+                        if (VERBOSE) {
+                            std::cerr << "> write " << std::hex << "0x" << std::setw(4) << std::setfill('0')
+                                      << input_data.value << " to AI @0x" << std::setw(4) << input_data.address
+                                      << std::endl;
+                        }
+
+                        if (PASSTHROUGH) {
+                            if (PASSTHROUGH_BASH) {
+                                bash_sleep();
+                                std::cout << "echo '";
+                            }
+                            std::cout << "ai:" << input_data.address << ':' << static_cast<uint16_t>(input_data.value)
+                                      << ':' << REGISTER_ENDIAN;
+                            if (PASSTHROUGH_BASH) std::cout << "'";
+                            std::cout << std::endl;
+                        }
                         break;
-                    }
-                    shm_ao->get_addr<uint16_t *>()[input_data.address] = static_cast<uint16_t>(input_data.value);
-                    break;
-                case input_data_t::register_type_t::AI:
-                    if (input_data.address >= ai_elements) {
-                        std::cerr << "line '" << line << "' discarded: address out of range" << std::endl;
-                        break;
-                    }
-                    if (input_data.value > std::numeric_limits<uint16_t>::max()) {
-                        std::cerr << "line '" << line << "' discarded: value out of range" << std::endl;
-                        break;
-                    }
-                    shm_ai->get_addr<uint16_t *>()[input_data.address] = static_cast<uint16_t>(input_data.value);
-                    break;
+                }
             }
         }
         terminate = true;
@@ -232,5 +557,5 @@ int main(int argc, char **argv) {
     }
 
     std::lock_guard<std::mutex> guard(m);  // wait until the thread is not within a critical section
-    std::cerr << "Terminating ..." << std::endl;
+    if (INTERACTIVE) std::cerr << std::endl << "Terminating ..." << std::endl;
 }
