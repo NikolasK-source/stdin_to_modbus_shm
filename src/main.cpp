@@ -7,8 +7,9 @@
 #include "license.hpp"
 
 #include "cxxshm.hpp"
+#include <chrono>
 #include <csignal>
-#include <cxxendian.hpp>
+#include <cxxendian/endian.hpp>
 #include <cxxopts.hpp>
 #include <filesystem>
 #include <iomanip>
@@ -19,6 +20,12 @@
 
 //! maximum number of modbus registers
 static constexpr std::size_t MAX_MODBUS_REGS = 0x10000;
+
+//! minimum time to sleep (bash script passthrough)
+static constexpr double MIN_BASH_SLEEP = 0.1;
+
+//! number of digits that have to be printed for bash sleep instructions
+constexpr int SLEEP_DIGITS = 1;
 
 /*! \brief main function
  *
@@ -55,6 +62,8 @@ int main(int argc, char **argv) {
                           "Numerical base (radix) that is used for the values (see "
                           "https://en.cppreference.com/w/cpp/string/basic_string/stoul)",
                           cxxopts::value<int>()->default_value("0"));
+    options.add_options()("p,passthrough", "write passthrough all executed commands to stdout");
+    options.add_options()("bash", "passthrough as bash script. No effect i '--passthrough' is not set");
     options.add_options()("h,help", "print usage");
     options.add_options()("v,verbose", "print what is written to the registers");
     options.add_options()("version", "print version information");
@@ -236,7 +245,11 @@ int main(int argc, char **argv) {
         exit(EX_OK);
     }
 
-    const bool VERBOSE = args.count("verbose");
+    const bool VERBOSE          = args.count("verbose");
+    const bool PASSTHROUGH      = args.count("passthrough");
+    const bool PASSTHROUGH_BASH = args.count("bash");
+
+    const std::string REGISTER_ENDIAN = endian::HostEndianness.isBig() ? "u16b" : "u16l";
 
     // open shared memory objects
     const auto &name_prefix = args["name-prefix"].as<std::string>();
@@ -310,6 +323,19 @@ int main(int argc, char **argv) {
 
     std::mutex m;  // to ensure that the program is not terminated while it writes to a shared memory
 
+    std::cout << std::fixed;
+
+    auto last_time  = std::chrono::steady_clock::now();
+    auto bash_sleep = [&last_time]() {
+        auto this_time  = std::chrono::steady_clock::now();
+        auto ms         = std::chrono::duration_cast<std::chrono::milliseconds>(this_time - last_time).count();
+        auto sleep_time = static_cast<double>(ms) / 1000.0;
+        if (sleep_time > MIN_BASH_SLEEP) {
+            last_time = this_time;
+            std::cout << "sleep " << std::setprecision(SLEEP_DIGITS) << sleep_time << std::endl;
+        }
+    };
+
     auto input_thread_func = [&] {
         std::string line;
         while (!terminate && std::getline(std::cin, line)) {
@@ -326,31 +352,55 @@ int main(int argc, char **argv) {
             std::lock_guard<std::mutex> guard(m);
             for (auto &input_data : instructions) {
                 switch (input_data.register_type) {
-                    case InputParser::Instruction::register_type_t::DO:
+                    case InputParser::Instruction::register_type_t::DO: {
                         if (input_data.address >= do_elements) {
                             std::cerr << "line '" << line << "' discarded: address out of range" << std::endl;
                             break;
                         }
-                        shm_do->get_addr<uint8_t *>()[input_data.address] = input_data.value ? 1 : 0;
+                        uint8_t value                                     = input_data.value ? 1 : 0;
+                        shm_do->get_addr<uint8_t *>()[input_data.address] = value;
                         if (VERBOSE) {
-                            std::cerr << "> write " << std::hex << "0x" << std::setw(2) << std::setfill('0')
-                                      << (input_data.value ? 1 : 0) << " to DO @0x" << std::setw(4)
-                                      << input_data.address << std::endl;
+                            std::cerr << "> write " << std::hex << "0x" << std::setw(2) << std::setfill('0') << value
+                                      << " to DO @0x" << std::setw(4) << input_data.address << std::endl;
                         }
+
+                        if (PASSTHROUGH) {
+                            if (PASSTHROUGH_BASH) {
+                                bash_sleep();
+                                std::cout << "echo '";
+                            }
+                            std::cout << "do:" << input_data.address << ':' << value;
+                            if (PASSTHROUGH_BASH) std::cout << "'";
+                            std::cout << std::endl;
+                        }
+
                         break;
-                    case InputParser::Instruction::register_type_t::DI:
+                    }
+                    case InputParser::Instruction::register_type_t::DI: {
                         if (input_data.address >= di_elements) {
                             std::cerr << "line '" << line << "' discarded: address out of range" << std::endl;
                             break;
                         }
-                        shm_di->get_addr<uint8_t *>()[input_data.address] = input_data.value ? 1 : 0;
+                        uint8_t value                                     = input_data.value ? 1 : 0;
+                        shm_di->get_addr<uint8_t *>()[input_data.address] = value;
 
                         if (VERBOSE) {
-                            std::cerr << "> write " << std::hex << "0x" << std::setw(2) << std::setfill('0')
-                                      << (input_data.value ? 1 : 0) << " to DI @0x" << std::setw(4)
-                                      << input_data.address << std::endl;
+                            std::cerr << "> write " << std::hex << "0x" << std::setw(2) << std::setfill('0') << value
+                                      << " to DI @0x" << std::setw(4) << input_data.address << std::endl;
                         }
+
+                        if (PASSTHROUGH) {
+                            if (PASSTHROUGH_BASH) {
+                                bash_sleep();
+                                std::cout << "echo '";
+                            }
+                            std::cout << "di:" << input_data.address << ':' << value;
+                            if (PASSTHROUGH_BASH) std::cout << "'";
+                            std::cout << std::endl;
+                        }
+
                         break;
+                    }
                     case InputParser::Instruction::register_type_t::AO:
                         if (input_data.address >= ao_elements) {
                             std::cerr << "line '" << line << "' discarded: address out of range" << std::endl;
@@ -362,6 +412,17 @@ int main(int argc, char **argv) {
                             std::cerr << "> write " << std::hex << "0x" << std::setw(4) << std::setfill('0')
                                       << input_data.value << " to AO @0x" << std::setw(4) << input_data.address
                                       << std::endl;
+                        }
+
+                        if (PASSTHROUGH) {
+                            if (PASSTHROUGH_BASH) {
+                                bash_sleep();
+                                std::cout << "echo '";
+                            }
+                            std::cout << "ao:" << input_data.address << ':' << static_cast<uint16_t>(input_data.value)
+                                      << ':' << REGISTER_ENDIAN;
+                            if (PASSTHROUGH_BASH) std::cout << "'";
+                            std::cout << std::endl;
                         }
                         break;
                     case InputParser::Instruction::register_type_t::AI:
@@ -375,6 +436,17 @@ int main(int argc, char **argv) {
                             std::cerr << "> write " << std::hex << "0x" << std::setw(4) << std::setfill('0')
                                       << input_data.value << " to AI @0x" << std::setw(4) << input_data.address
                                       << std::endl;
+                        }
+
+                        if (PASSTHROUGH) {
+                            if (PASSTHROUGH_BASH) {
+                                bash_sleep();
+                                std::cout << "echo '";
+                            }
+                            std::cout << "ai:" << input_data.address << ':' << static_cast<uint16_t>(input_data.value)
+                                      << ':' << REGISTER_ENDIAN;
+                            if (PASSTHROUGH_BASH) std::cout << "'";
+                            std::cout << std::endl;
                         }
                         break;
                 }
