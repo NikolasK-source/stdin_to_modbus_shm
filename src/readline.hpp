@@ -6,12 +6,34 @@
 #include "readline/history.h"
 #include "readline/readline.h"
 
+/**
+ * @brief readline wrapper class
+ */
 class Readline {
 public:
+    /**
+     * @brief initialize readline
+     *
+     * @details
+     * Disables the readline library signal handling
+     */
     Readline() { rl_catch_signals = 0; }
 
+    /**
+     * @brief disable readline
+     *
+     * @details
+     * Restores the terminal state. Does only change anything if the readline() call was interrupted by a signal.
+     */
     ~Readline() { rl_cleanup_after_signal(); }
 
+    /**
+     * @brief read a line from stdin using the readline library
+     * @param prompt user prompt
+     * @return read line
+     *
+     * @exception runtime_error thrown if there is no more data to read (EOF)
+     */
     std::string get_line(const std::string &prompt = "") {
         const char *line = readline(prompt.c_str());
         if (line) {
