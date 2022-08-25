@@ -58,7 +58,7 @@ int main(int argc, char **argv) {
 
     // establish signal handler
     static volatile bool terminate = false;
-    struct sigaction     term_sa;
+    struct sigaction     term_sa {};
     term_sa.sa_handler = [](int) { terminate = true; };
     term_sa.sa_flags   = SA_RESTART;
     sigemptyset(&term_sa.sa_mask);
@@ -100,26 +100,40 @@ int main(int argc, char **argv) {
         exit_usage();
     }
 
+    auto print_format = [](bool help = false) {
+        std::cout << "Data input format: reg_type:address:value[:data_type]" << std::endl;
+        std::cout << "    reg_type : modbus register type:           [do|di|ao|ai]" << std::endl;
+        std::cout << "    address  : address of the target register: [0-" << MAX_MODBUS_REGS - 1 << "]" << std::endl;
+        std::cout << "               The actual maximum register depends on the size of the modbus shared memory."
+                  << std::endl;
+        std::cout << "    value    : value that is written to the target register" << std::endl;
+        std::cout << "               Some string constants are available. The input format depends on the type of "
+                     "register and data type."
+                  << std::endl;
+        if (help) std::cout << "               Use --constants for more details.";
+        else
+            std::cout << "               Type 'help constants' for more details ";
+        std::cout << std::endl;
+        std::cout << "               For the registers do and di all numerical values different from 0 are interpreted "
+                     "as 1."
+                  << std::endl;
+        std::cout << "    data_type: an optional data type specifier" << std::endl;
+        std::cout << "               If no data type is specified, exactly one register is written in host byte order."
+                  << std::endl;
+        if (help)
+            std::cout << "               Use --data-types to get a list of supported data type identifiers."
+                      << std::endl;
+        else
+            std::cout << "               Type 'help types' to get a list of supported data type identifiers."
+                      << std::endl;
+    };
+
     // print usage
     if (args.count("help")) {
         options.set_width(120);
         std::cout << options.help() << std::endl;
         std::cout << std::endl;
-        std::cout << "Data input format: reg_type:address:value[:data_type]" << std::endl;
-        std::cout << "    reg_type : modbus register type:                         [do|di|ao|ai]" << std::endl;
-        std::cout << "    address  : address of the target register:               [0-" << MAX_MODBUS_REGS - 1 << "]"
-                  << std::endl;
-        std::cout << "    value    : value that is written to the target register: [0-"
-                  << std::numeric_limits<uint16_t>::max() << "]" << std::endl;
-        std::cout << "               some string constants are available. Use --constants for more details."
-                  << std::endl;
-        std::cout << "               For the registers do and di all numerical values different from 0 are interpreted "
-                     "as 1."
-                  << std::endl;
-        std::cout << "    data_type: an optional data type specifier. " << std::endl;
-        std::cout << "               If no data type is specified, exactly one register is written in host byte order."
-                  << std::endl;
-        std::cout << "               Use --data-types to get a list of supported data type identifiers." << std::endl;
+        print_format();
         std::cout << std::endl;
         std::cout << "This application uses the following libraries:" << std::endl;
         std::cout << "  - cxxopts by jarro2783 (https://github.com/jarro2783/cxxopts)" << std::endl;
@@ -142,8 +156,7 @@ int main(int argc, char **argv) {
         return EX_OK;
     }
 
-    // data type identifiers
-    if (args.count("data-types")) {
+    auto print_data_types = []() {
         std::cout << "Supported data types:" << std::endl;
         std::cout << "  - Float:" << std::endl;
         std::cout << "      - 32 Bit:" << std::endl;
@@ -238,11 +251,15 @@ int main(int argc, char **argv) {
                      "the Modbus master's"
                   << std::endl;
         std::cout << "      definition of the endianness." << std::endl;
-        exit(EX_OK);
+    };
+
+    // data type identifiers
+    if (args.count("data-types")) {
+        print_data_types();
+        return EX_OK;
     }
 
-    // print licenses
-    if (args.count("constants")) {
+    auto print_constants = []() {
         std::cout << "Known string constants:" << std::endl;
         std::cout << "  true      1" << std::endl;
         std::cout << "  one       1" << std::endl;
@@ -257,14 +274,18 @@ int main(int argc, char **argv) {
         std::cout << "  off       0" << std::endl;
         std::cout << "  off       0" << std::endl;
         std::cout << "  pi        " << InputParser::PI << std::endl;
-        std::cout << "  -pi       " << InputParser::NPI << std::endl;
+        std::cout << "  -pi      " << InputParser::NPI << std::endl;
         std::cout << "  sqrt2     " << InputParser::SQRT2 << std::endl;
         std::cout << "  sqrt3     " << InputParser::SQRT3 << std::endl;
         std::cout << "  phi       " << InputParser::PHI << std::endl;
         std::cout << "  ln2       " << InputParser::LN2 << std::endl;
         std::cout << "  e         " << InputParser::E << std::endl;
+    };
 
-        exit(EX_OK);
+    // print licenses
+    if (args.count("constants")) {
+        print_constants();
+        return EX_OK;
     }
 
     const bool VERBOSE          = args.count("verbose");
@@ -368,11 +389,39 @@ int main(int argc, char **argv) {
             std::string line;
             if (INTERACTIVE) {
                 try {
-                    line = readline->get_line();
+                    line = readline->get_line(">>> ");
                 } catch (const std::runtime_error &) {
                     // eof
                     break;
                 }
+
+                if (line == "exit") break;
+
+                if (line == "help") {
+                    std::cout << "usage: help {format, constants, types}" << std::endl;
+                    std::cout << std::endl;
+                    std::cout << "    Type 'exit' to exit the application." << std::endl;
+                    continue;
+                }
+
+                if (line == "help format") {
+                    print_format(false);
+                    add_history(line.c_str());
+                    continue;
+                }
+
+                if (line == "help constants") {
+                    print_constants();
+                    add_history(line.c_str());
+                    continue;
+                }
+
+                if (line == "help types") {
+                    print_data_types();
+                    add_history(line.c_str());
+                    continue;
+                }
+
             } else {
                 if (!std::getline(std::cin, line)) break;
             }
