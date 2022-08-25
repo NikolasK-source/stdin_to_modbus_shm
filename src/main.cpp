@@ -460,7 +460,7 @@ int main(int argc, char **argv) {
                                 bash_sleep();
                                 std::cout << "echo '";
                             }
-                            std::cout << "do:" << input_data.address << ':' << value;
+                            std::cout << "do:" << input_data.address << ':' << static_cast<int>(value);
                             if (PASSTHROUGH_BASH) std::cout << "'";
                             std::cout << std::endl;
                         }
@@ -485,7 +485,7 @@ int main(int argc, char **argv) {
                                 bash_sleep();
                                 std::cout << "echo '";
                             }
-                            std::cout << "di:" << input_data.address << ':' << value;
+                            std::cout << "di:" << input_data.address << ':' << static_cast<int>(value);
                             if (PASSTHROUGH_BASH) std::cout << "'";
                             std::cout << std::endl;
                         }
