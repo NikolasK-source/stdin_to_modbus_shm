@@ -88,14 +88,14 @@ int main(int argc, char **argv) {
         std::cout << options.help() << std::endl;
         std::cout << std::endl;
         std::cout << "Data input format: reg_type:address:value[:data_type]" << std::endl;
-        std::cout << "    reg_type: modbus register type:                         [do|di|ao|ai]" << std::endl;
-        std::cout << "    address : address of the target register:               [0-" << MAX_MODBUS_REGS - 1 << "]"
+        std::cout << "    reg_type : modbus register type:                         [do|di|ao|ai]" << std::endl;
+        std::cout << "    address  : address of the target register:               [0-" << MAX_MODBUS_REGS - 1 << "]"
                   << std::endl;
-        std::cout << "    value   : value that is written to the target register: [0-"
+        std::cout << "    value    : value that is written to the target register: [0-"
                   << std::numeric_limits<uint16_t>::max() << "]" << std::endl;
-        std::cout << "              some string constants are available. Use --constants for more details."
+        std::cout << "               some string constants are available. Use --constants for more details."
                   << std::endl;
-        std::cout << "              For the registers do and di all numerical values different from 0 are interpreted "
+        std::cout << "               For the registers do and di all numerical values different from 0 are interpreted "
                      "as 1."
                   << std::endl;
         std::cout << "    data_type: an optional data type specifier. " << std::endl;
