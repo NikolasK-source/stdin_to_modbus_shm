@@ -5,6 +5,7 @@
 
 #include "InputParser.hpp"
 #include "license.hpp"
+#include "readline.hpp"
 
 #include "cxxshm.hpp"
 #include <chrono>
@@ -64,6 +65,7 @@ int main(int argc, char **argv) {
                           cxxopts::value<int>()->default_value("0"));
     options.add_options()("p,passthrough", "write passthrough all executed commands to stdout");
     options.add_options()("bash", "passthrough as bash script. No effect i '--passthrough' is not set");
+    options.add_options()("valid-hist", "add only valid commands to command history");
     options.add_options()("h,help", "print usage");
     options.add_options()("v,verbose", "print what is written to the registers");
     options.add_options()("version", "print version information");
@@ -105,6 +107,7 @@ int main(int argc, char **argv) {
         std::cout << "  - cxxopts by jarro2783 (https://github.com/jarro2783/cxxopts)" << std::endl;
         std::cout << "  - cxxshm (https://github.com/NikolasK-source/cxxshm)" << std::endl;
         std::cout << "  - cxxendian (https://github.com/NikolasK-source/cxxendian)" << std::endl;
+        std::cout << "  - GNU Readline (http://git.savannah.gnu.org/cgit/readline.git/)" << std::endl;
         return EX_OK;
     }
 
@@ -249,6 +252,11 @@ int main(int argc, char **argv) {
     const bool VERBOSE          = args.count("verbose");
     const bool PASSTHROUGH      = args.count("passthrough");
     const bool PASSTHROUGH_BASH = args.count("bash");
+    const bool HISTORY          = isatty(STDIN_FILENO) == 1;  // enable command history if input is tty
+    const bool VALID_HIST       = args.count("valid-hist");
+
+    std::unique_ptr<Readline> readline;
+    if (HISTORY) { readline = std::make_unique<Readline>(); }
 
     const std::string REGISTER_ENDIAN = endian::HostEndianness.isBig() ? "u16b" : "u16l";
 
@@ -338,8 +346,21 @@ int main(int argc, char **argv) {
     };
 
     auto input_thread_func = [&] {
-        std::string line;
-        while (!terminate && std::getline(std::cin, line)) {
+        while (!terminate) {
+            std::string line;
+            if (HISTORY) {
+                try {
+                    line = readline->get_line();
+                } catch (const std::runtime_error &) {
+                    // eof
+                    break;
+                }
+            } else {
+                if (!std::getline(std::cin, line)) break;
+            }
+
+            if (!line.empty() && !VALID_HIST) add_history(line.c_str());
+
             // parse input
             std::vector<InputParser::Instruction> instructions;
             try {
@@ -348,6 +369,8 @@ int main(int argc, char **argv) {
                 std::cerr << "line '" << line << "' discarded: " << e.what() << std::endl;
                 continue;
             }
+
+            if (VALID_HIST) add_history(line.c_str());
 
             // write value to target
             std::lock_guard<std::mutex> guard(m);
@@ -467,5 +490,5 @@ int main(int argc, char **argv) {
     }
 
     std::lock_guard<std::mutex> guard(m);  // wait until the thread is not within a critical section
-    std::cerr << "Terminating ..." << std::endl;
+    std::cerr << std::endl << "Terminating ..." << std::endl;
 }

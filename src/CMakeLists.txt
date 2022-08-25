@@ -15,6 +15,7 @@ target_sources(${Target} PRIVATE license.hpp)
 target_sources(${Target} PRIVATE InputParser.hpp)
 target_sources(${Target} PRIVATE InputParser_float.hpp)
 target_sources(${Target} PRIVATE InputParser_int.hpp)
+target_sources(${Target} PRIVATE readline.hpp)
 
 
 # ---------------------------------------- subdirectories --------------------------------------------------------------
