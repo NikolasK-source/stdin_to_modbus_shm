@@ -123,17 +123,22 @@ The following data types are possible:
       - u64_badcfehg, u64_little_rev, **u64lr**  
         64-Bit unsigned integer, little endian, reversed register order
 
-**Note:  
-The endianness refers to the layout of the data in the shared memory and may differ from the Modbus master's 
-definition of the endianness.**
+> **Note**:  
+The endianness refers to the layout of the data in the shared memory and may differ from the Modbus Server's 
+definition of the endianness.
 
 ### Command Passthrough
 By using the option ```--passthrough```, all valid inputs are written to stdout.
 By additionally enabling the option ```--bash```, the output is created as a bash script that reproduces the inputs
 (including the timing).
 
+## Install
 
-## Using the Flatpak package
+### Using the Modbus Collection Flapak Package: Shared Memory Modbus (recommended)
+[SHM-Modbus](https://nikolask-source.github.io/SHM_Modbus/) is a collection of the shared memory modbus tools.
+It is available as flatpak and published on flathub as ```network.koesling.shm-modbs```.
+
+### Using the Standalone Flatpak package
 The flatpak package can be installed via the .flatpak file.
 This can be downloaded from the GitHub [projects release page](https://github.com/NikolasK-source/stdin_to_modbus_shm/releases):
 
@@ -150,7 +155,7 @@ To enable calling with ```stdin-to-modbus-shm``` [this script](https://gist.gith
 In order to be executable everywhere, the path in which the script is placed must be in the ```PATH``` environment variable.
 
 
-## Build from Source
+### Build from Source
 
 The following packages are required for building the application:
 - cmake
