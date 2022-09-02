@@ -248,7 +248,7 @@ int main(int argc, char **argv) {
                   << std::endl;
         std::cout << std::endl;
         std::cout << "Note: The endianness refers to the layout of the data in the shared memory and may differ from "
-                     "the Modbus master's"
+                     "the definition of the Modbus Server"
                   << std::endl;
         std::cout << "      definition of the endianness." << std::endl;
     };

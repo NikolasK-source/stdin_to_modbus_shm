@@ -123,9 +123,9 @@ The following data types are possible:
       - u64_badcfehg, u64_little_rev, **u64lr**  
         64-Bit unsigned integer, little endian, reversed register order
 
-**Note:  
-The endianness refers to the layout of the data in the shared memory and may differ from the Modbus master's 
-definition of the endianness.**
+> **Note**:  
+The endianness refers to the layout of the data in the shared memory and may differ from the Modbus Server's 
+definition of the endianness.
 
 ### Command Passthrough
 By using the option ```--passthrough```, all valid inputs are written to stdout.
