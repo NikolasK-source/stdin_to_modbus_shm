@@ -422,11 +422,11 @@ int main(int argc, char **argv) {
                     continue;
                 }
 
+                if (!line.empty() && !VALID_HIST) add_history(line.c_str());
             } else {
                 if (!std::getline(std::cin, line)) break;
             }
 
-            if (!line.empty() && !VALID_HIST) add_history(line.c_str());
 
             // parse input
             std::vector<InputParser::Instruction> instructions;
@@ -437,7 +437,7 @@ int main(int argc, char **argv) {
                 continue;
             }
 
-            if (VALID_HIST) add_history(line.c_str());
+            if (INTERACTIVE && VALID_HIST) add_history(line.c_str());
 
             // write value to target
             std::lock_guard<std::mutex> guard(m);
@@ -543,6 +543,8 @@ int main(int argc, char **argv) {
                 }
             }
         }
+
+        rl_clear_history();
         terminate = true;
     };
 
