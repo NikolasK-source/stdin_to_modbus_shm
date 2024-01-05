@@ -133,7 +133,7 @@ int main(int argc, char **argv) {
         options.set_width(120);
         std::cout << options.help() << std::endl;
         std::cout << std::endl;
-        print_format();
+        print_format(true);
         std::cout << std::endl;
         std::cout << "This application uses the following libraries:" << std::endl;
         std::cout << "  - cxxopts by jarro2783 (https://github.com/jarro2783/cxxopts)" << std::endl;
