@@ -7,3 +7,6 @@
 [submodule "libs/cxxendian"]
 	path = libs/cxxendian
 	url = https://github.com/NikolasK-source/cxxendian.git
+[submodule "libs/cxxsemaphore"]
+	path = libs/cxxsemaphore
+	url = https://github.com/NikolasK-source/cxxsemaphore.git

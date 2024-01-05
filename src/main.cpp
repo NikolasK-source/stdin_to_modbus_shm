@@ -7,9 +7,11 @@
 #include "license.hpp"
 #include "readline.hpp"
 
+#include "cxxsemaphore.hpp"
 #include "cxxshm.hpp"
 #include <array>
 #include <chrono>
+#include <cmath>
 #include <csignal>
 #include <cxxendian/endian.hpp>
 #include <cxxopts.hpp>
@@ -29,6 +31,15 @@ static constexpr double MIN_BASH_SLEEP = 0.1;
 
 //! number of digits that have to be printed for bash sleep instructions
 constexpr int SLEEP_DIGITS = 1;
+
+//* value to increment error counter if semaphore could not be acquired
+static constexpr long SEMAPHORE_ERROR_INC = 10;
+
+//* value to decrement error counter if semaphore could be acquired
+static constexpr long SEMAPHORE_ERROR_DEC = 1;
+
+//* maximum value of semaphore error counter
+static constexpr long SEMAPHORE_ERROR_MAX = 100;
 
 constexpr std::array<int, 10> TERM_SIGNALS = {SIGINT,
                                               SIGTERM,
@@ -90,6 +101,12 @@ int main(int argc, char **argv) {
     options.add_options()("license", "show licenses");
     options.add_options()("data-types", "show list of supported data type identifiers");
     options.add_options()("constants", "list string constants that can be used as value");
+    options.add_options()("semaphore",
+                          "protect the shared memory with an existing named semaphore against simultaneous access",
+                          cxxopts::value<std::string>());
+    options.add_options()("semaphore-timeout",
+                          "maximum time (in seconds) to wait for semaphore (default: 0.1)",
+                          cxxopts::value<double>()->default_value("0.1"));
 
     // parse arguments
     cxxopts::ParseResult args;
@@ -133,7 +150,7 @@ int main(int argc, char **argv) {
         options.set_width(120);
         std::cout << options.help() << std::endl;
         std::cout << std::endl;
-        print_format();
+        print_format(true);
         std::cout << std::endl;
         std::cout << "This application uses the following libraries:" << std::endl;
         std::cout << "  - cxxopts by jarro2783 (https://github.com/jarro2783/cxxopts)" << std::endl;
@@ -371,6 +388,29 @@ int main(int argc, char **argv) {
 
     std::mutex m;  // to ensure that the program is not terminated while it writes to a shared memory
 
+    std::unique_ptr<cxxsemaphore::Semaphore> semaphore;
+    long                                     semaphore_error_counter = 0;
+    if (args.count("semaphore")) {
+        try {
+            semaphore = std::make_unique<cxxsemaphore::Semaphore>(args["semaphore"].as<std::string>());
+        } catch (const std::exception &e) {
+            std::cerr << e.what() << std::endl;
+            return EX_SOFTWARE;
+        }
+    }
+
+    const double SEMAPHORE_TIMEOUT_S = args["semaphore-timeout"].as<double>();
+    if (SEMAPHORE_TIMEOUT_S < 0.000'001) {
+        std::cerr << "semaphore-timeout: invalid value" << std::endl;
+        return EX_USAGE;
+    }
+
+    double         modf_dummy {};
+    const timespec SEMAPHORE_MAX_TIME = {
+            static_cast<time_t>(args["semaphore-timeout"].as<double>()),
+            static_cast<suseconds_t>(std::modf(SEMAPHORE_TIMEOUT_S, &modf_dummy) * 1'000'000),
+    };
+
     std::cout << std::fixed;
 
     auto last_time  = std::chrono::steady_clock::now();
@@ -441,6 +481,24 @@ int main(int argc, char **argv) {
 
             // write value to target
             std::lock_guard<std::mutex> guard(m);
+
+            if (semaphore) {
+                while (!semaphore->wait(SEMAPHORE_MAX_TIME)) {
+                    std::cerr << " WARNING: Failed to acquire semaphore '" << semaphore->get_name() << "' within "
+                              << SEMAPHORE_TIMEOUT_S << "s." << std::endl;
+
+                    semaphore_error_counter += SEMAPHORE_ERROR_INC;
+
+                    if (semaphore_error_counter >= SEMAPHORE_ERROR_MAX) {
+                        std::cerr << "ERROR: Repeatedly failed to acquire the semaphore" << std::endl;
+                        return EX_SOFTWARE;
+                    }
+                }
+
+                semaphore_error_counter -= SEMAPHORE_ERROR_DEC;
+                if (semaphore_error_counter < 0) semaphore_error_counter = 0;
+            }
+
             for (auto &input_data : instructions) {
                 switch (input_data.register_type) {
                     case InputParser::Instruction::register_type_t::DO: {
@@ -542,6 +600,8 @@ int main(int argc, char **argv) {
                         break;
                 }
             }
+
+            if (semaphore && semaphore->is_acquired()) semaphore->post();
         }
 
         rl_clear_history();
