@@ -19,6 +19,7 @@
 #include <iomanip>
 #include <iostream>
 #include <mutex>
+#include <sys/ioctl.h>
 #include <sysexits.h>
 #include <thread>
 #include <unistd.h>
@@ -147,7 +148,15 @@ int main(int argc, char **argv) {
 
     // print usage
     if (args.count("help")) {
-        options.set_width(120);
+        static constexpr std::size_t MIN_HELP_SIZE = 80;
+        if (isatty(STDIN_FILENO)) {
+            struct winsize w {};
+            if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &w) != -1) {  // NOLINT
+                options.set_width(std::max(static_cast<decltype(w.ws_col)>(MIN_HELP_SIZE), w.ws_col));
+            }
+        } else {
+            options.set_width(MIN_HELP_SIZE);
+        }
         std::cout << options.help() << std::endl;
         std::cout << std::endl;
         print_format(true);
