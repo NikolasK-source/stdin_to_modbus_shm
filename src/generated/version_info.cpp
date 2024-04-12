@@ -7,8 +7,8 @@
 
 #include "version_info.hpp"
 
-const std::string stdin_to-modbus-shm_version_info::VERSION_STR(PROJECT_VERSION);
-const std::string stdin_to-modbus-shm_version_info::NAME(PROJECT_NAME);
-const std::string stdin_to-modbus-shm_version_info::COMPILER(COMPILER_INFO);
-const std::string stdin_to-modbus-shm_version_info::SYSTEM(SYSTEM_INFO);
-const std::string stdin_to-modbus-shm_version_info::GIT_HASH("cea9d0580e2b76930a8c2c8bcfe6ed376f640233-dirty");
+const std::string stdin_to_modbus_shm_version_info::VERSION_STR(PROJECT_VERSION);
+const std::string stdin_to_modbus_shm_version_info::NAME(PROJECT_NAME);
+const std::string stdin_to_modbus_shm_version_info::COMPILER(COMPILER_INFO);
+const std::string stdin_to_modbus_shm_version_info::SYSTEM(SYSTEM_INFO);
+const std::string stdin_to_modbus_shm_version_info::GIT_HASH("60e5df975348194055772e16e37c5b2a6d98e18d-dirty");

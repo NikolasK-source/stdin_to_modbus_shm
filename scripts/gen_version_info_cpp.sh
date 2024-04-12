@@ -7,7 +7,7 @@ if [ $# -ne 1 ]; then
     >&2 echo "usage: $0 project_name"
 fi
 
-project_name=$(echo "$1" | sed -e "s/\\s/_/" -e "s/-/_/")
+project_name=$(echo "$1" | sed -e "s/\\s/_/g" -e "s/-/_/g")
 
 # "$(git rev-parse HEAD)$(test $(git status --porcelain | wc -l) -gt 0 && printf -- -dirty)"
 GIT_HASH=$(git rev-parse HEAD)

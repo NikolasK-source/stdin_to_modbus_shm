@@ -11,7 +11,7 @@
  * @brief struct that contains version information
  * @details contains only static members --> no instance can be created
  */
-struct stdin_to-modbus-shm_version_info {
+struct stdin_to_modbus_shm_version_info {
     //* Mayor version number
     static constexpr int MAYOR = PROJECT_VERSION_MAJOR;
 
@@ -43,5 +43,5 @@ struct stdin_to-modbus-shm_version_info {
     static const std::string GIT_HASH;
 
 private:
-    stdin_to-modbus-shm_version_info() = default;
+    stdin_to_modbus_shm_version_info() = default;
 };

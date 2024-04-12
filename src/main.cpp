@@ -9,6 +9,7 @@
 
 #include "cxxsemaphore.hpp"
 #include "cxxshm.hpp"
+#include "generated/version_info.hpp"
 #include <array>
 #include <chrono>
 #include <cmath>
@@ -82,32 +83,38 @@ int main(int argc, char **argv) {
     }
 
     // all command line arguments
-    options.add_options()("n,name-prefix",
-                          "name prefix of the shared memory objects",
-                          cxxopts::value<std::string>()->default_value("modbus_"));
-    options.add_options()("address-base",
-                          "Numerical base (radix) that is used for the addresses (see "
-                          "https://en.cppreference.com/w/cpp/string/basic_string/stoul)",
-                          cxxopts::value<int>()->default_value("0"));
-    options.add_options()("value-base",
-                          "Numerical base (radix) that is used for the values (see "
-                          "https://en.cppreference.com/w/cpp/string/basic_string/stoul)",
-                          cxxopts::value<int>()->default_value("0"));
-    options.add_options()("p,passthrough", "write passthrough all executed commands to stdout");
-    options.add_options()("bash", "passthrough as bash script. No effect i '--passthrough' is not set");
-    options.add_options()("valid-hist", "add only valid commands to command history");
-    options.add_options()("h,help", "print usage");
-    options.add_options()("v,verbose", "print what is written to the registers");
-    options.add_options()("version", "print version information");
-    options.add_options()("license", "show licenses");
-    options.add_options()("data-types", "show list of supported data type identifiers");
-    options.add_options()("constants", "list string constants that can be used as value");
-    options.add_options()("semaphore",
-                          "protect the shared memory with an existing named semaphore against simultaneous access",
-                          cxxopts::value<std::string>());
-    options.add_options()("semaphore-timeout",
-                          "maximum time (in seconds) to wait for semaphore (default: 0.1)",
-                          cxxopts::value<double>()->default_value("0.1"));
+    options.add_options("shared memory")("n,name-prefix",
+                                         "name prefix of the shared memory objects",
+                                         cxxopts::value<std::string>()->default_value("modbus_"));
+    options.add_options("settings")("address-base",
+                                    "Numerical base (radix) that is used for the addresses (see "
+                                    "https://en.cppreference.com/w/cpp/string/basic_string/stoul)",
+                                    cxxopts::value<int>()->default_value("0"));
+    options.add_options("settings")("value-base",
+                                    "Numerical base (radix) that is used for the values (see "
+                                    "https://en.cppreference.com/w/cpp/string/basic_string/stoul)",
+                                    cxxopts::value<int>()->default_value("0"));
+    options.add_options("settings")("p,passthrough", "write passthrough all executed commands to stdout");
+    options.add_options("settings")("bash", "passthrough as bash script. No effect i '--passthrough' is not set");
+    options.add_options("settings")("valid-hist", "add only valid commands to command history");
+    options.add_options("other")("h,help", "print usage");
+    options.add_options("other")("v,verbose", "print what is written to the registers");
+    options.add_options("version information")("version", "print version and exit");
+    options.add_options("version information")("longversion",
+                                               "print version (including compiler and system info) and exit");
+    options.add_options("version information")("shortversion", "print version (only version string) and exit");
+    options.add_options("version information")("git-hash", "print git hash");
+    options.add_options("other")("license", "show licenses");
+    options.add_options("other")("license-full", "show licences (full license text)");
+    options.add_options("other")("data-types", "show list of supported data type identifiers");
+    options.add_options("other")("constants", "list string constants that can be used as value");
+    options.add_options("shared memory")(
+            "semaphore",
+            "protect the shared memory with an existing named semaphore against simultaneous access",
+            cxxopts::value<std::string>());
+    options.add_options("shared memory")("semaphore-timeout",
+                                         "maximum time (in seconds) to wait for semaphore (default: 0.1)",
+                                         cxxopts::value<double>()->default_value("0.1"));
 
     // parse arguments
     cxxopts::ParseResult args;
@@ -168,15 +175,37 @@ int main(int argc, char **argv) {
     }
 
     // print version
+    if (args.count("shortversion")) {
+        std::cout << PROJECT_VERSION << '\n';
+        return EX_OK;
+    }
+
     if (args.count("version")) {
-        std::cout << PROJECT_NAME << ' ' << PROJECT_VERSION << " (compiled with " << COMPILER_INFO << " on "
-                  << SYSTEM_INFO << ')' << '\n';
+        std::cout << PROJECT_NAME << ' ' << PROJECT_VERSION << '\n';
+        return EX_OK;
+    }
+
+    if (args.count("longversion")) {
+        std::cout << PROJECT_NAME << ' ' << PROJECT_VERSION << '\n';
+        std::cout << "   compiled with " << COMPILER_INFO << '\n';
+        std::cout << "   on system " << SYSTEM_INFO << '\n';
+        std::cout << "   from git commit " << RCS_HASH << '\n';
+        return EX_OK;
+    }
+
+    if (args.count("git-hash")) {
+        std::cout << RCS_HASH << '\n';
         return EX_OK;
     }
 
     // print licenses
     if (args.count("license")) {
         print_licenses(std::cout, false);
+        return EX_OK;
+    }
+
+    if (args.count("license-full")) {
+        print_licenses(std::cout, true);
         return EX_OK;
     }
 
