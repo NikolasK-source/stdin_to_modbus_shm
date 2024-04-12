@@ -615,6 +615,7 @@ int main(int argc, char **argv) {
 
         rl_clear_history();
         terminate = true;
+        return EX_OK;
     };
 
     // start input thread.

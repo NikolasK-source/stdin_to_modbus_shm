@@ -206,7 +206,7 @@ std::vector<Instruction> parse(std::string line, int base_addr, int base_value, 
     }
 
     // get register type
-    Instruction::register_type_t type;
+    Instruction::register_type_t type {};
     auto                        &type_str = split_input.at(0);
     for (auto &c : type_str)
         c = static_cast<char>(std::tolower(c));
