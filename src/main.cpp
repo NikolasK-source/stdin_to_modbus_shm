@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2021-2022 Nikolas Koesling <nikolas@koesling.info>.
- * This program is free software. You can redistribute it and/or modify it under the terms of the MIT License.
+ * This program is free software. You can redistribute it and/or modify it under the terms of the GPLv3 License.
  */
 
 #include "InputParser.hpp"
@@ -9,6 +9,7 @@
 
 #include "cxxsemaphore.hpp"
 #include "cxxshm.hpp"
+#include "generated/version_info.hpp"
 #include <array>
 #include <chrono>
 #include <cmath>
@@ -19,6 +20,7 @@
 #include <iomanip>
 #include <iostream>
 #include <mutex>
+#include <sys/ioctl.h>
 #include <sysexits.h>
 #include <thread>
 #include <unistd.h>
@@ -59,11 +61,11 @@ constexpr std::array<int, 10> TERM_SIGNALS = {SIGINT,
  * @return exit code
  */
 int main(int argc, char **argv) {
-    const std::string exe_name = std::filesystem::path(argv[0]).filename().string();
+    const std::string exe_name = std::filesystem::path(*argv).filename().string();
     cxxopts::Options  options(exe_name, "Read instructions from stdin and write them to a modbus shared memory");
 
     auto exit_usage = [&exe_name]() {
-        std::cerr << "Use '" << exe_name << " --help' for more information." << std::endl;
+        std::cerr << "Use '" << exe_name << " --help' for more information.\n";
         exit(EX_USAGE);
     };
 
@@ -81,193 +83,219 @@ int main(int argc, char **argv) {
     }
 
     // all command line arguments
-    options.add_options()("n,name-prefix",
-                          "name prefix of the shared memory objects",
-                          cxxopts::value<std::string>()->default_value("modbus_"));
-    options.add_options()("address-base",
-                          "Numerical base (radix) that is used for the addresses (see "
-                          "https://en.cppreference.com/w/cpp/string/basic_string/stoul)",
-                          cxxopts::value<int>()->default_value("0"));
-    options.add_options()("value-base",
-                          "Numerical base (radix) that is used for the values (see "
-                          "https://en.cppreference.com/w/cpp/string/basic_string/stoul)",
-                          cxxopts::value<int>()->default_value("0"));
-    options.add_options()("p,passthrough", "write passthrough all executed commands to stdout");
-    options.add_options()("bash", "passthrough as bash script. No effect i '--passthrough' is not set");
-    options.add_options()("valid-hist", "add only valid commands to command history");
-    options.add_options()("h,help", "print usage");
-    options.add_options()("v,verbose", "print what is written to the registers");
-    options.add_options()("version", "print version information");
-    options.add_options()("license", "show licenses");
-    options.add_options()("data-types", "show list of supported data type identifiers");
-    options.add_options()("constants", "list string constants that can be used as value");
-    options.add_options()("semaphore",
-                          "protect the shared memory with an existing named semaphore against simultaneous access",
-                          cxxopts::value<std::string>());
-    options.add_options()("semaphore-timeout",
-                          "maximum time (in seconds) to wait for semaphore (default: 0.1)",
-                          cxxopts::value<double>()->default_value("0.1"));
+    options.add_options("shared memory")("n,name-prefix",
+                                         "name prefix of the shared memory objects",
+                                         cxxopts::value<std::string>()->default_value("modbus_"));
+    options.add_options("settings")("address-base",
+                                    "Numerical base (radix) that is used for the addresses (see "
+                                    "https://en.cppreference.com/w/cpp/string/basic_string/stoul)",
+                                    cxxopts::value<int>()->default_value("0"));
+    options.add_options("settings")("value-base",
+                                    "Numerical base (radix) that is used for the values (see "
+                                    "https://en.cppreference.com/w/cpp/string/basic_string/stoul)",
+                                    cxxopts::value<int>()->default_value("0"));
+    options.add_options("settings")("p,passthrough", "write passthrough all executed commands to stdout");
+    options.add_options("settings")("bash", "passthrough as bash script. No effect i '--passthrough' is not set");
+    options.add_options("settings")("valid-hist", "add only valid commands to command history");
+    options.add_options("other")("h,help", "print usage");
+    options.add_options("other")("v,verbose", "print what is written to the registers");
+    options.add_options("version information")("version", "print version and exit");
+    options.add_options("version information")("longversion",
+                                               "print version (including compiler and system info) and exit");
+    options.add_options("version information")("shortversion", "print version (only version string) and exit");
+    options.add_options("version information")("git-hash", "print git hash");
+    options.add_options("other")("license", "show licenses");
+    options.add_options("other")("license-full", "show licences (full license text)");
+    options.add_options("other")("data-types", "show list of supported data type identifiers");
+    options.add_options("other")("constants", "list string constants that can be used as value");
+    options.add_options("shared memory")(
+            "semaphore",
+            "protect the shared memory with an existing named semaphore against simultaneous access",
+            cxxopts::value<std::string>());
+    options.add_options("shared memory")("semaphore-timeout",
+                                         "maximum time (in seconds) to wait for semaphore (default: 0.1)",
+                                         cxxopts::value<double>()->default_value("0.1"));
 
     // parse arguments
     cxxopts::ParseResult args;
     try {
         args = options.parse(argc, argv);
-    } catch (cxxopts::OptionParseException &e) {
-        std::cerr << "Failed to parse arguments: " << e.what() << '.' << std::endl;
+    } catch (cxxopts::exceptions::parsing::exception &e) {
+        std::cerr << "Failed to parse arguments: " << e.what() << '.' << '\n';
         exit_usage();
     }
 
     auto print_format = [](bool help = false) {
-        std::cout << "Data input format: reg_type:address:value[:data_type]" << std::endl;
-        std::cout << "    reg_type : modbus register type:           [do|di|ao|ai]" << std::endl;
-        std::cout << "    address  : address of the target register: [0-" << MAX_MODBUS_REGS - 1 << "]" << std::endl;
+        std::cout << "Data input format: reg_type:address:value[:data_type]" << '\n';
+        std::cout << "    reg_type : modbus register type:           [do|di|ao|ai]" << '\n';
+        std::cout << "    address  : address of the target register: [0-" << MAX_MODBUS_REGS - 1 << "]" << '\n';
         std::cout << "               The actual maximum register depends on the size of the modbus shared memory."
-                  << std::endl;
-        std::cout << "    value    : value that is written to the target register" << std::endl;
+                  << '\n';
+        std::cout << "    value    : value that is written to the target register" << '\n';
         std::cout << "               Some string constants are available. The input format depends on the type of "
                      "register and data type."
-                  << std::endl;
+                  << '\n';
         if (help) std::cout << "               Use --constants for more details.";
         else
             std::cout << "               Type 'help constants' for more details ";
-        std::cout << std::endl;
+        std::cout << '\n';
         std::cout << "               For the registers do and di all numerical values different from 0 are interpreted "
                      "as 1."
-                  << std::endl;
-        std::cout << "    data_type: an optional data type specifier" << std::endl;
+                  << '\n';
+        std::cout << "    data_type: an optional data type specifier" << '\n';
         std::cout << "               If no data type is specified, exactly one register is written in host byte order."
-                  << std::endl;
+                  << '\n';
         if (help)
-            std::cout << "               Use --data-types to get a list of supported data type identifiers."
-                      << std::endl;
+            std::cout << "               Use --data-types to get a list of supported data type identifiers." << '\n';
         else
-            std::cout << "               Type 'help types' to get a list of supported data type identifiers."
-                      << std::endl;
+            std::cout << "               Type 'help types' to get a list of supported data type identifiers." << '\n';
     };
 
     // print usage
     if (args.count("help")) {
-        options.set_width(120);
-        std::cout << options.help() << std::endl;
-        std::cout << std::endl;
+        static constexpr std::size_t MIN_HELP_SIZE = 80;
+        if (isatty(STDIN_FILENO)) {
+            struct winsize w {};
+            if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &w) != -1) {  // NOLINT
+                options.set_width(std::max(static_cast<decltype(w.ws_col)>(MIN_HELP_SIZE), w.ws_col));
+            }
+        } else {
+            options.set_width(MIN_HELP_SIZE);
+        }
+        std::cout << options.help() << '\n';
+        std::cout << '\n';
         print_format(true);
-        std::cout << std::endl;
-        std::cout << "This application uses the following libraries:" << std::endl;
-        std::cout << "  - cxxopts by jarro2783 (https://github.com/jarro2783/cxxopts)" << std::endl;
-        std::cout << "  - cxxshm (https://github.com/NikolasK-source/cxxshm)" << std::endl;
-        std::cout << "  - cxxendian (https://github.com/NikolasK-source/cxxendian)" << std::endl;
-        std::cout << "  - GNU Readline (http://git.savannah.gnu.org/cgit/readline.git/)" << std::endl;
+        std::cout << '\n';
+        std::cout << "This application uses the following libraries:" << '\n';
+        std::cout << "  - cxxopts by jarro2783 (https://github.com/jarro2783/cxxopts)" << '\n';
+        std::cout << "  - cxxshm (https://github.com/NikolasK-source/cxxshm)" << '\n';
+        std::cout << "  - cxxendian (https://github.com/NikolasK-source/cxxendian)" << '\n';
+        std::cout << "  - GNU Readline (http://git.savannah.gnu.org/cgit/readline.git/)" << '\n';
         return EX_OK;
     }
 
     // print version
+    if (args.count("shortversion")) {
+        std::cout << PROJECT_VERSION << '\n';
+        return EX_OK;
+    }
+
     if (args.count("version")) {
-        std::cout << PROJECT_NAME << ' ' << PROJECT_VERSION << " (compiled with " << COMPILER_INFO << " on "
-                  << SYSTEM_INFO << ')' << std::endl;
+        std::cout << PROJECT_NAME << ' ' << PROJECT_VERSION << '\n';
+        return EX_OK;
+    }
+
+    if (args.count("longversion")) {
+        std::cout << PROJECT_NAME << ' ' << PROJECT_VERSION << '\n';
+        std::cout << "   compiled with " << COMPILER_INFO << '\n';
+        std::cout << "   on system " << SYSTEM_INFO << '\n';
+        std::cout << "   from git commit " << RCS_HASH << '\n';
+        return EX_OK;
+    }
+
+    if (args.count("git-hash")) {
+        std::cout << RCS_HASH << '\n';
         return EX_OK;
     }
 
     // print licenses
     if (args.count("license")) {
-        print_licenses(std::cout);
+        print_licenses(std::cout, false);
+        return EX_OK;
+    }
+
+    if (args.count("license-full")) {
+        print_licenses(std::cout, true);
         return EX_OK;
     }
 
     auto print_data_types = []() {
-        std::cout << "Supported data types:" << std::endl;
-        std::cout << "  - Float:" << std::endl;
-        std::cout << "      - 32 Bit:" << std::endl;
-        std::cout << "          - f32_abcd, f32_big, f32b                32-Bit floating point   in big endian"
-                  << std::endl;
+        std::cout << "Supported data types:" << '\n';
+        std::cout << "  - Float:" << '\n';
+        std::cout << "      - 32 Bit:" << '\n';
+        std::cout << "          - f32_abcd, f32_big, f32b                32-Bit floating point   in big endian" << '\n';
         std::cout << "          - f32_dcba, f32_little, f32l             32-Bit floating point   in little endian"
-                  << std::endl;
+                  << '\n';
         std::cout << "          - f32_cdab, f32_big_rev, f32br           32-Bit floating point   in big endian,     - "
                      "reversed register order"
-                  << std::endl;
+                  << '\n';
         std::cout << "          - f32_badc, f32_little_rev, f32lr        32-Bit floating point   in little endian,  - "
                      "reversed register order"
-                  << std::endl;
-        std::cout << "      - 64 Bit:" << std::endl;
-        std::cout << "          - f64_abcdefgh, f64_big, f64b            64-Bit floating point   in big endian"
-                  << std::endl;
+                  << '\n';
+        std::cout << "      - 64 Bit:" << '\n';
+        std::cout << "          - f64_abcdefgh, f64_big, f64b            64-Bit floating point   in big endian" << '\n';
         std::cout << "          - f64_ghefcdab, f64_little, f64l         64-Bit floating point   in little endian"
-                  << std::endl;
+                  << '\n';
         std::cout << "          - f64_badcfehg, f64_big_rev, f64br       64-Bit floating point   in big endian,     - "
                      "reversed register order"
-                  << std::endl;
+                  << '\n';
         std::cout << "          - f64_hgfedcba, f64_little_rev, f64lr    64-Bit floating point   in little endian,  - "
                      "reversed register order"
-                  << std::endl;
-        std::cout << "  - Int:" << std::endl;
-        std::cout << "      - 8 Bit:" << std::endl;
+                  << '\n';
+        std::cout << "  - Int:" << '\n';
+        std::cout << "      - 8 Bit:" << '\n';
         std::cout << "          - u8_lo                                  8-Bit unsigned integer   written to low  byte "
                      "of register"
-                  << std::endl;
+                  << '\n';
         std::cout << "          - u8_hi                                  8-Bit unsigned integer   written to high byte "
                      "of register"
-                  << std::endl;
+                  << '\n';
         std::cout << "          - i8_lo                                  8-Bit   signed integer   written to low  byte "
                      "of register"
-                  << std::endl;
+                  << '\n';
         std::cout << "          - i8_hi                                  8-Bit   signed integer   written to high byte "
                      "of register"
-                  << std::endl;
-        std::cout << "      - 16 Bit" << std::endl;
-        std::cout << "          - u16_ab, u16_big, u16b                  16-Bit unsigned integer in big endian"
-                  << std::endl;
-        std::cout << "          - i16_ab, i16_big, i16b                  16-Bit signed integer   in big endian"
-                  << std::endl;
+                  << '\n';
+        std::cout << "      - 16 Bit" << '\n';
+        std::cout << "          - u16_ab, u16_big, u16b                  16-Bit unsigned integer in big endian" << '\n';
+        std::cout << "          - i16_ab, i16_big, i16b                  16-Bit signed integer   in big endian" << '\n';
         std::cout << "          - u16_ba, u16_little, u16l               16-Bit unsigned integer in little endian"
-                  << std::endl;
+                  << '\n';
         std::cout << "          - i16_ba, i16_little, i16l               16-Bit signed integer   in little endian"
-                  << std::endl;
-        std::cout << "      - 32 Bit:" << std::endl;
-        std::cout << "          - u32_abcd, u32_big, u32b                32-Bit unsigned integer in big endian"
-                  << std::endl;
-        std::cout << "          - i32_abcd, i32_big, i32b                32-Bit   signed integer in big endian"
-                  << std::endl;
+                  << '\n';
+        std::cout << "      - 32 Bit:" << '\n';
+        std::cout << "          - u32_abcd, u32_big, u32b                32-Bit unsigned integer in big endian" << '\n';
+        std::cout << "          - i32_abcd, i32_big, i32b                32-Bit   signed integer in big endian" << '\n';
         std::cout << "          - u32_dcba, u32_little, u32l             32-Bit unsigned integer in little endian"
-                  << std::endl;
+                  << '\n';
         std::cout << "          - i32_dcba, i32_little, i32l             32-Bit   signed integer in little endian"
-                  << std::endl;
+                  << '\n';
         std::cout << "          - u32_cdab, u32_big_rev, u32br           32-Bit unsigned integer in big endian,     - "
                      "reversed register order"
-                  << std::endl;
+                  << '\n';
         std::cout << "          - i32_cdab, i32_big_rev, i32br           32-Bit   signed integer in big endian,     - "
                      "reversed register order"
-                  << std::endl;
+                  << '\n';
         std::cout << "          - u32_badc, u32_little_rev, u32lr        32-Bit unsigned integer in little endian,  - "
                      "reversed register order"
-                  << std::endl;
+                  << '\n';
         std::cout << "          - i32_badc, i32_little_rev, i32lr        32-Bit   signed integer in little endian,  - "
                      "reversed register order"
-                  << std::endl;
-        std::cout << "      - 64 Bit:" << std::endl;
-        std::cout << "          - u64_abcdefgh, u64_big, u64b            64-Bit unsigned integer in big endian"
-                  << std::endl;
-        std::cout << "          - i64_abcdefgh, i64_big, i64b            64-Bit   signed integer in big endian"
-                  << std::endl;
+                  << '\n';
+        std::cout << "      - 64 Bit:" << '\n';
+        std::cout << "          - u64_abcdefgh, u64_big, u64b            64-Bit unsigned integer in big endian" << '\n';
+        std::cout << "          - i64_abcdefgh, i64_big, i64b            64-Bit   signed integer in big endian" << '\n';
         std::cout << "          - u64_hgfedcba, u64_little, u64l         64-Bit unsigned integer in little endian"
-                  << std::endl;
+                  << '\n';
         std::cout << "          - i64_hgfedcba, i64_little, i64l         64-Bit   signed integer in little endian"
-                  << std::endl;
+                  << '\n';
         std::cout << "          - u64_ghefcdab, u64_big_rev, u64br       64-Bit unsigned integer in big endian      - "
                      "reversed register order"
-                  << std::endl;
+                  << '\n';
         std::cout << "          - i64_ghefcdab, i64_big_rev, i64br       64-Bit   signed integer in big endian      - "
                      "reversed register order"
-                  << std::endl;
+                  << '\n';
         std::cout << "          - u64_badcfehg, u64_little_rev, u64lr    64-Bit unsigned integer in little endian,  - "
                      "reversed register order"
-                  << std::endl;
+                  << '\n';
         std::cout << "          - i64_badcfehg, i64_little_rev, i64lr    64-Bit   signed integer in little endian,  - "
                      "reversed register order"
-                  << std::endl;
-        std::cout << std::endl;
+                  << '\n';
+        std::cout << '\n';
         std::cout << "Note: The endianness refers to the layout of the data in the shared memory and may differ from "
                      "the definition of the Modbus Server"
-                  << std::endl;
-        std::cout << "      definition of the endianness." << std::endl;
+                  << '\n';
+        std::cout << "      definition of the endianness." << '\n';
     };
 
     // data type identifiers
@@ -277,26 +305,26 @@ int main(int argc, char **argv) {
     }
 
     auto print_constants = []() {
-        std::cout << "Known string constants:" << std::endl;
-        std::cout << "  true      1" << std::endl;
-        std::cout << "  one       1" << std::endl;
-        std::cout << "  high      1" << std::endl;
-        std::cout << "  active    1" << std::endl;
-        std::cout << "  on        1" << std::endl;
-        std::cout << "  enabled   1" << std::endl;
-        std::cout << "  false     0" << std::endl;
-        std::cout << "  zero      0" << std::endl;
-        std::cout << "  low       0" << std::endl;
-        std::cout << "  inactive  0" << std::endl;
-        std::cout << "  off       0" << std::endl;
-        std::cout << "  off       0" << std::endl;
-        std::cout << "  pi        " << InputParser::PI << std::endl;
-        std::cout << "  -pi      " << InputParser::NPI << std::endl;
-        std::cout << "  sqrt2     " << InputParser::SQRT2 << std::endl;
-        std::cout << "  sqrt3     " << InputParser::SQRT3 << std::endl;
-        std::cout << "  phi       " << InputParser::PHI << std::endl;
-        std::cout << "  ln2       " << InputParser::LN2 << std::endl;
-        std::cout << "  e         " << InputParser::E << std::endl;
+        std::cout << "Known string constants:" << '\n';
+        std::cout << "  true      1" << '\n';
+        std::cout << "  one       1" << '\n';
+        std::cout << "  high      1" << '\n';
+        std::cout << "  active    1" << '\n';
+        std::cout << "  on        1" << '\n';
+        std::cout << "  enabled   1" << '\n';
+        std::cout << "  false     0" << '\n';
+        std::cout << "  zero      0" << '\n';
+        std::cout << "  low       0" << '\n';
+        std::cout << "  inactive  0" << '\n';
+        std::cout << "  off       0" << '\n';
+        std::cout << "  off       0" << '\n';
+        std::cout << "  pi        " << InputParser::PI << '\n';
+        std::cout << "  -pi      " << InputParser::NPI << '\n';
+        std::cout << "  sqrt2     " << InputParser::SQRT2 << '\n';
+        std::cout << "  sqrt3     " << InputParser::SQRT3 << '\n';
+        std::cout << "  phi       " << InputParser::PHI << '\n';
+        std::cout << "  ln2       " << InputParser::LN2 << '\n';
+        std::cout << "  e         " << InputParser::E << '\n';
     };
 
     // print licenses
@@ -330,51 +358,51 @@ int main(int argc, char **argv) {
         shm_ao = std::make_unique<cxxshm::SharedMemory>(name_prefix + "AO");
         shm_ai = std::make_unique<cxxshm::SharedMemory>(name_prefix + "AI");
     } catch (const std::system_error &e) {
-        std::cerr << e.what() << std::endl;
+        std::cerr << e.what() << '\n';
         return EX_OSERR;
     }
 
     // check shared mem
     if (shm_do->get_size() > MAX_MODBUS_REGS) {
         std::cerr << "shared memory '" << shm_do->get_name() << "is to large to be a valid modbus shared memory."
-                  << std::endl;
+                  << '\n';
         return EX_SOFTWARE;
     }
 
     if (shm_di->get_size() > MAX_MODBUS_REGS) {
         std::cerr << "shared memory '" << shm_di->get_name() << "' is to large to be a valid modbus shared memory."
-                  << std::endl;
+                  << '\n';
         return EX_SOFTWARE;
     }
 
     if (shm_ao->get_size() / 2 > MAX_MODBUS_REGS) {
         std::cerr << "shared memory '" << shm_ao->get_name() << "' is to large to be a valid modbus shared memory."
-                  << std::endl;
+                  << '\n';
         return EX_SOFTWARE;
     }
 
     if (shm_ai->get_size() / 2 > MAX_MODBUS_REGS) {
         std::cerr << "shared memory '" << shm_ai->get_name() << "' is to large to be a valid modbus shared memory."
-                  << std::endl;
+                  << '\n';
         return EX_SOFTWARE;
     }
 
     if (VERBOSE) {
-        std::cerr << "DO registers: " << shm_do->get_size() << std::endl;
-        std::cerr << "DI registers: " << shm_di->get_size() << std::endl;
-        std::cerr << "AO registers: " << shm_ao->get_size() / 2 << std::endl;
-        std::cerr << "AI registers: " << shm_ai->get_size() / 2 << std::endl;
+        std::cerr << "DO registers: " << shm_do->get_size() << '\n';
+        std::cerr << "DI registers: " << shm_di->get_size() << '\n';
+        std::cerr << "AO registers: " << shm_ao->get_size() / 2 << '\n';
+        std::cerr << "AI registers: " << shm_ai->get_size() / 2 << '\n';
     }
 
     if (shm_ao->get_size() % 2) {
         std::cerr << "the size of shared memory '" << shm_ao->get_name() << "' is odd. It is not a valid modbus shm."
-                  << std::endl;
+                  << '\n';
         return EX_SOFTWARE;
     }
 
     if (shm_ai->get_size() % 2) {
         std::cerr << "the size of shared memory '" << shm_ai->get_name() << "' is odd. It is not a valid modbus shm."
-                  << std::endl;
+                  << '\n';
         return EX_SOFTWARE;
     }
 
@@ -394,14 +422,14 @@ int main(int argc, char **argv) {
         try {
             semaphore = std::make_unique<cxxsemaphore::Semaphore>(args["semaphore"].as<std::string>());
         } catch (const std::exception &e) {
-            std::cerr << e.what() << std::endl;
+            std::cerr << e.what() << '\n';
             return EX_SOFTWARE;
         }
     }
 
     const double SEMAPHORE_TIMEOUT_S = args["semaphore-timeout"].as<double>();
     if (SEMAPHORE_TIMEOUT_S < 0.000'001) {
-        std::cerr << "semaphore-timeout: invalid value" << std::endl;
+        std::cerr << "semaphore-timeout: invalid value" << '\n';
         return EX_USAGE;
     }
 
@@ -420,7 +448,7 @@ int main(int argc, char **argv) {
         auto sleep_time = static_cast<double>(ms) / 1000.0;
         if (sleep_time > MIN_BASH_SLEEP) {
             last_time = this_time;
-            std::cout << "sleep " << std::setprecision(SLEEP_DIGITS) << sleep_time << std::endl;
+            std::cout << "sleep " << std::setprecision(SLEEP_DIGITS) << sleep_time << std::endl;  // NOLINT
         }
     };
 
@@ -438,9 +466,9 @@ int main(int argc, char **argv) {
                 if (line == "exit") break;
 
                 if (line == "help") {
-                    std::cout << "usage: help {format, constants, types}" << std::endl;
-                    std::cout << std::endl;
-                    std::cout << "    Type 'exit' to exit the application." << std::endl;
+                    std::cout << "usage: help {format, constants, types}" << '\n';
+                    std::cout << '\n';
+                    std::cout << "    Type 'exit' to exit the application." << std::endl;  // NOLINT
                     continue;
                 }
 
@@ -473,7 +501,7 @@ int main(int argc, char **argv) {
             try {
                 instructions = InputParser::parse(line, addr_base, value_base, VERBOSE);
             } catch (std::exception &e) {
-                std::cerr << "line '" << line << "' discarded: " << e.what() << std::endl;
+                std::cerr << "line '" << line << "' discarded: " << e.what() << std::endl;  // NOLINT
                 continue;
             }
 
@@ -485,12 +513,12 @@ int main(int argc, char **argv) {
             if (semaphore) {
                 while (!semaphore->wait(SEMAPHORE_MAX_TIME)) {
                     std::cerr << " WARNING: Failed to acquire semaphore '" << semaphore->get_name() << "' within "
-                              << SEMAPHORE_TIMEOUT_S << "s." << std::endl;
+                              << SEMAPHORE_TIMEOUT_S << "s." << std::endl;  // NOLINT
 
                     semaphore_error_counter += SEMAPHORE_ERROR_INC;
 
                     if (semaphore_error_counter >= SEMAPHORE_ERROR_MAX) {
-                        std::cerr << "ERROR: Repeatedly failed to acquire the semaphore" << std::endl;
+                        std::cerr << "ERROR: Repeatedly failed to acquire the semaphore\n";
                         return EX_SOFTWARE;
                     }
                 }
@@ -503,14 +531,15 @@ int main(int argc, char **argv) {
                 switch (input_data.register_type) {
                     case InputParser::Instruction::register_type_t::DO: {
                         if (input_data.address >= do_elements) {
-                            std::cerr << "line '" << line << "' discarded: address out of range" << std::endl;
+                            std::cerr << "line '" << line << "' discarded: address out of range"
+                                      << std::endl;  // NOLINT
                             break;
                         }
                         uint8_t value                                     = input_data.value ? 1 : 0;
                         shm_do->get_addr<uint8_t *>()[input_data.address] = value;
                         if (VERBOSE) {
                             std::cerr << "> write " << std::hex << "0x" << std::setw(2) << std::setfill('0') << value
-                                      << " to DO @0x" << std::setw(4) << input_data.address << std::endl;
+                                      << " to DO @0x" << std::setw(4) << input_data.address << std::endl;  // NOLINT
                         }
 
                         if (PASSTHROUGH) {
@@ -520,14 +549,15 @@ int main(int argc, char **argv) {
                             }
                             std::cout << "do:" << input_data.address << ':' << static_cast<int>(value);
                             if (PASSTHROUGH_BASH) std::cout << "'";
-                            std::cout << std::endl;
+                            std::cout << std::endl;  // NOLINT
                         }
 
                         break;
                     }
                     case InputParser::Instruction::register_type_t::DI: {
                         if (input_data.address >= di_elements) {
-                            std::cerr << "line '" << line << "' discarded: address out of range" << std::endl;
+                            std::cerr << "line '" << line << "' discarded: address out of range"
+                                      << std::endl;  // NOLINT
                             break;
                         }
                         uint8_t value                                     = input_data.value ? 1 : 0;
@@ -535,7 +565,7 @@ int main(int argc, char **argv) {
 
                         if (VERBOSE) {
                             std::cerr << "> write " << std::hex << "0x" << std::setw(2) << std::setfill('0') << value
-                                      << " to DI @0x" << std::setw(4) << input_data.address << std::endl;
+                                      << " to DI @0x" << std::setw(4) << input_data.address << std::endl;  // NOLINT
                         }
 
                         if (PASSTHROUGH) {
@@ -545,14 +575,15 @@ int main(int argc, char **argv) {
                             }
                             std::cout << "di:" << input_data.address << ':' << static_cast<int>(value);
                             if (PASSTHROUGH_BASH) std::cout << "'";
-                            std::cout << std::endl;
+                            std::cout << std::endl;  // NOLINT
                         }
 
                         break;
                     }
                     case InputParser::Instruction::register_type_t::AO:
                         if (input_data.address >= ao_elements) {
-                            std::cerr << "line '" << line << "' discarded: address out of range" << std::endl;
+                            std::cerr << "line '" << line << "' discarded: address out of range"
+                                      << std::endl;  // NOLINT
                             break;
                         }
                         shm_ao->get_addr<uint16_t *>()[input_data.address] = static_cast<uint16_t>(input_data.value);
@@ -560,7 +591,7 @@ int main(int argc, char **argv) {
                         if (VERBOSE) {
                             std::cerr << "> write " << std::hex << "0x" << std::setw(4) << std::setfill('0')
                                       << input_data.value << " to AO @0x" << std::setw(4) << input_data.address
-                                      << std::endl;
+                                      << std::endl;  // NOLINT
                         }
 
                         if (PASSTHROUGH) {
@@ -571,12 +602,13 @@ int main(int argc, char **argv) {
                             std::cout << "ao:" << input_data.address << ':' << static_cast<uint16_t>(input_data.value)
                                       << ':' << REGISTER_ENDIAN;
                             if (PASSTHROUGH_BASH) std::cout << "'";
-                            std::cout << std::endl;
+                            std::cout << std::endl;  // NOLINT
                         }
                         break;
                     case InputParser::Instruction::register_type_t::AI:
                         if (input_data.address >= ai_elements) {
-                            std::cerr << "line '" << line << "' discarded: address out of range" << std::endl;
+                            std::cerr << "line '" << line << "' discarded: address out of range"
+                                      << std::endl;  // NOLINT
                             break;
                         }
                         shm_ai->get_addr<uint16_t *>()[input_data.address] = static_cast<uint16_t>(input_data.value);
@@ -584,7 +616,7 @@ int main(int argc, char **argv) {
                         if (VERBOSE) {
                             std::cerr << "> write " << std::hex << "0x" << std::setw(4) << std::setfill('0')
                                       << input_data.value << " to AI @0x" << std::setw(4) << input_data.address
-                                      << std::endl;
+                                      << std::endl;  // NOLINT
                         }
 
                         if (PASSTHROUGH) {
@@ -595,7 +627,7 @@ int main(int argc, char **argv) {
                             std::cout << "ai:" << input_data.address << ':' << static_cast<uint16_t>(input_data.value)
                                       << ':' << REGISTER_ENDIAN;
                             if (PASSTHROUGH_BASH) std::cout << "'";
-                            std::cout << std::endl;
+                            std::cout << std::endl;  // NOLINT
                         }
                         break;
                 }
@@ -606,6 +638,7 @@ int main(int argc, char **argv) {
 
         rl_clear_history();
         terminate = true;
+        return EX_OK;
     };
 
     // start input thread.
@@ -615,9 +648,9 @@ int main(int argc, char **argv) {
     input_thread.detach();
 
     while (!terminate) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));  // NOLINT
     }
 
     std::lock_guard<std::mutex> guard(m);  // wait until the thread is not within a critical section
-    if (INTERACTIVE) std::cerr << std::endl << "Terminating ..." << std::endl;
+    if (INTERACTIVE) std::cerr << "\nTerminating ..." << std::endl;  // NOLINT
 }
