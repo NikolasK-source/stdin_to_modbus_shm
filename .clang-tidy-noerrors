@@ -51,6 +51,7 @@ Checks:          'bugprone-*,
                   readability-string-compare,
                   readability-uniqueptr-delete-release,
                   readability-use-anyofallof
-                  -modernize-use-trailing-return-type'
+                  -modernize-use-trailing-return-type
+                  -bugprone-exception-escape'
 WarningsAsErrors: ''
 HeaderFilterRegex: ''

@@ -11,4 +11,4 @@ const std::string stdin_to-modbus-shm_version_info::VERSION_STR(PROJECT_VERSION)
 const std::string stdin_to-modbus-shm_version_info::NAME(PROJECT_NAME);
 const std::string stdin_to-modbus-shm_version_info::COMPILER(COMPILER_INFO);
 const std::string stdin_to-modbus-shm_version_info::SYSTEM(SYSTEM_INFO);
-const std::string stdin_to-modbus-shm_version_info::GIT_HASH("2cba0bc31d6cd235fc572fc0b97cb375885f939b-dirty");
+const std::string stdin_to-modbus-shm_version_info::GIT_HASH("cea9d0580e2b76930a8c2c8bcfe6ed376f640233-dirty");
