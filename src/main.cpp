@@ -62,7 +62,7 @@ constexpr std::array<int, 10> TERM_SIGNALS = {SIGINT,
  */
 int main(int argc, char **argv) {
     const std::string exe_name = std::filesystem::path(*argv).filename().string();
-    cxxopts::Options  options(exe_name, "Read instructions from stdin and write them to a modbus shared memory");
+    cxxopts::Options  options(exe_name, "Read instructions from stdin and write them to a Modbus shared memory");
 
     auto exit_usage = [&exe_name]() {
         std::cerr << "Use '" << exe_name << " --help' for more information.\n";
@@ -115,6 +115,11 @@ int main(int argc, char **argv) {
     options.add_options("shared memory")("semaphore-timeout",
                                          "maximum time (in seconds) to wait for semaphore (default: 0.1)",
                                          cxxopts::value<double>()->default_value("0.1"));
+    options.add_options("shared_memory")(
+            "pid",
+            "terminate application if application with given pid is terminated. Provide "
+            "the pid of the Modbus client to terminate when the Modbus client is terminated.",
+            cxxopts::value<pid_t>());
 
     // parse arguments
     cxxopts::ParseResult args;
@@ -129,7 +134,7 @@ int main(int argc, char **argv) {
         std::cout << "Data input format: reg_type:address:value[:data_type]" << '\n';
         std::cout << "    reg_type : modbus register type:           [do|di|ao|ai]" << '\n';
         std::cout << "    address  : address of the target register: [0-" << MAX_MODBUS_REGS - 1 << "]" << '\n';
-        std::cout << "               The actual maximum register depends on the size of the modbus shared memory."
+        std::cout << "               The actual maximum register depends on the size of the Modbus shared memory."
                   << '\n';
         std::cout << "    value    : value that is written to the target register" << '\n';
         std::cout << "               Some string constants are available. The input format depends on the type of "
@@ -364,25 +369,25 @@ int main(int argc, char **argv) {
 
     // check shared mem
     if (shm_do->get_size() > MAX_MODBUS_REGS) {
-        std::cerr << "shared memory '" << shm_do->get_name() << "is to large to be a valid modbus shared memory."
+        std::cerr << "shared memory '" << shm_do->get_name() << "is to large to be a valid Modbus shared memory."
                   << '\n';
         return EX_SOFTWARE;
     }
 
     if (shm_di->get_size() > MAX_MODBUS_REGS) {
-        std::cerr << "shared memory '" << shm_di->get_name() << "' is to large to be a valid modbus shared memory."
+        std::cerr << "shared memory '" << shm_di->get_name() << "' is to large to be a valid Modbus shared memory."
                   << '\n';
         return EX_SOFTWARE;
     }
 
     if (shm_ao->get_size() / 2 > MAX_MODBUS_REGS) {
-        std::cerr << "shared memory '" << shm_ao->get_name() << "' is to large to be a valid modbus shared memory."
+        std::cerr << "shared memory '" << shm_ao->get_name() << "' is to large to be a valid Modbus shared memory."
                   << '\n';
         return EX_SOFTWARE;
     }
 
     if (shm_ai->get_size() / 2 > MAX_MODBUS_REGS) {
-        std::cerr << "shared memory '" << shm_ai->get_name() << "' is to large to be a valid modbus shared memory."
+        std::cerr << "shared memory '" << shm_ai->get_name() << "' is to large to be a valid Modbus shared memory."
                   << '\n';
         return EX_SOFTWARE;
     }
@@ -395,13 +400,13 @@ int main(int argc, char **argv) {
     }
 
     if (shm_ao->get_size() % 2) {
-        std::cerr << "the size of shared memory '" << shm_ao->get_name() << "' is odd. It is not a valid modbus shm."
+        std::cerr << "the size of shared memory '" << shm_ao->get_name() << "' is odd. It is not a valid Modbus shm."
                   << '\n';
         return EX_SOFTWARE;
     }
 
     if (shm_ai->get_size() % 2) {
-        std::cerr << "the size of shared memory '" << shm_ai->get_name() << "' is odd. It is not a valid modbus shm."
+        std::cerr << "the size of shared memory '" << shm_ai->get_name() << "' is odd. It is not a valid Modbus shm."
                   << '\n';
         return EX_SOFTWARE;
     }
@@ -425,6 +430,12 @@ int main(int argc, char **argv) {
             std::cerr << e.what() << '\n';
             return EX_SOFTWARE;
         }
+    } else {
+        std::cerr << "WARNING: No semaphore specified.\n"
+                     "         Concurrent access to the shared memory is possible.\n"
+                     "         This can result in CORRUPTED DATA.\n"
+                     "         Use --semaphore to specify a semaphore that is provided by the Modbus client.\n";
+        std::cerr << std::flush;
     }
 
     const double SEMAPHORE_TIMEOUT_S = args["semaphore-timeout"].as<double>();
@@ -438,6 +449,22 @@ int main(int argc, char **argv) {
             static_cast<time_t>(args["semaphore-timeout"].as<double>()),
             static_cast<suseconds_t>(std::modf(SEMAPHORE_TIMEOUT_S, &modf_dummy) * 1'000'000),
     };
+
+    // modbus client pid
+    pid_t mb_client_pid     = 0;
+    bool  use_mb_client_pid = false;
+    if (args.count("pid")) {
+        mb_client_pid     = args["pid"].as<pid_t>();
+        use_mb_client_pid = true;
+    } else {
+        std::cerr << "WARNING: No Modbus client pid provided.\n"
+                     "         Terminating the Modbus client application WILL NOT result in the termination of this "
+                     "application.\n"
+                     "         This application WILL NOT connect to the shared memory of a restarted Modbus client.\n"
+                     "         Use --pid to specify the pid of the Modbus client.\n"
+                     "         Command line example: --pid $(pidof modbus-tcp-client-shm)\n"
+                  << std::flush;
+    }
 
     std::cout << std::fixed;
 
@@ -648,6 +675,20 @@ int main(int argc, char **argv) {
     input_thread.detach();
 
     while (!terminate) {
+        if (use_mb_client_pid) {
+            // check if modbus client is still alive
+            int tmp = kill(mb_client_pid, 0);
+            if (tmp == -1) {
+                if (errno == ESRCH) {
+                    std::cerr << "Modbus client (pid=" << mb_client_pid << ") no longer alive.\n" << std::flush;
+                } else {
+                    perror("failed to send signal to the Modbus client");
+                }
+                terminate = true;
+                break;
+            }
+        }
+
         std::this_thread::sleep_for(std::chrono::milliseconds(100));  // NOLINT
     }
 
