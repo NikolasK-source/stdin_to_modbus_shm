@@ -9,7 +9,7 @@ cmake_minimum_required(VERSION 3.22.0 FATAL_ERROR)
 # ======================================================================================================================
 
 # project
-project(stdin-to-modbus-shm LANGUAGES CXX VERSION 1.4.0)
+project(stdin-to-modbus-shm LANGUAGES CXX VERSION 1.5.0)
 
 # settings
 set(Target "stdin-to-modbus-shm") # Executable name (without file extension!)
