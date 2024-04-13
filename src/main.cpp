@@ -118,7 +118,7 @@ int main(int argc, char **argv) {
     options.add_options("shared_memory")(
             "pid",
             "terminate application if application with given pid is terminated. Provide "
-            "the pid of the modbus client to terminate when the mosbus client is terminated.",
+            "the pid of the Modbus client to terminate when the Modbus client is terminated.",
             cxxopts::value<pid_t>());
 
     // parse arguments
